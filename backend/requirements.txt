@@ -1,0 +1,111 @@
+# from the original Mac venv (Python 3.12.4)
+# Install with:  pip install -r requirements.txt
+
+# ── PDF Parsing ──────────────────────────────────────────────────
+docling==2.94.0
+docling-core==2.77.0
+docling-ibm-models==3.13.2
+docling-parse==5.11.0
+pymupdf==1.27.2.3          # fitz — equation text repair, asset extraction
+pypdf==6.12.1
+pypdfium2==4.30.0
+pytesseract==0.3.13        # OCR fallback for image-rendered tables
+rapidocr==3.8.1            # OCR engine used by Docling
+
+# ── Chunking ─────────────────────────────────────────────────────
+tiktoken==0.13.0           # token counting (structural_chunker.py)
+semchunk==3.2.5            # semantic chunking helpers
+
+# ── Embeddings ───────────────────────────────────────────────────
+sentence-transformers==5.5.1   # bge-m3 local embeddings + CrossEncoder reranker
+transformers==5.8.1
+torch==2.12.0
+torchvision==0.27.0
+safetensors==0.7.0
+tokenizers==0.22.2
+accelerate==1.13.0
+timm==1.0.27               # vision model backbone (used by Docling models)
+
+# ── Vector Database ──────────────────────────────────────────────
+chromadb>=0.6.0             # local persistent vector DB, pre-built Windows wheels
+
+# ── LLM Clients ──────────────────────────────────────────────────
+openai==2.38.0             # used for Groq (OpenAI-compatible) + OpenAI native
+groq==1.2.0                # Groq SDK (contextual prefix generation)
+ollama==0.6.2              # local Ollama SDK (VLM + LLM)
+anthropic                  # Claude API (VLM + LLM)
+cohere==7.0.0              # Cohere reranker + embeddings
+google-generativeai        # Gemini VLM + LLM + embeddings
+
+# ── BM25 / Retrieval ─────────────────────────────────────────────
+rank-bm25                  # BM25Okapi implementation
+
+# ── ML / Numerical ───────────────────────────────────────────────
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.8.0
+opencv-python-headless==4.11.0.86
+pillow==10.4.0
+
+# ── HTTP / Async ─────────────────────────────────────────────────
+httpx==0.28.1
+requests==2.34.2
+websockets==16.0
+
+# ── Config / Env ─────────────────────────────────────────────────
+python-dotenv==1.2.2
+pydantic==2.13.4
+pydantic-settings==2.14.1
+omegaconf==2.3.0
+
+# ── Data / Serialization ─────────────────────────────────────────
+pandas==3.0.3
+openpyxl==3.1.5
+xlsxwriter==3.2.9
+python-pptx==1.0.2
+python-docx==1.2.0
+fastavro==1.12.2
+jsonlines==4.0.0
+jsonschema==4.26.0
+lxml==6.1.1
+beautifulsoup4==4.14.3
+
+# ── NLP Utilities ────────────────────────────────────────────────
+nltk==3.9.4
+regex==2026.5.9
+tabulate==0.10.0
+
+# ── Utilities ────────────────────────────────────────────────────
+tqdm==4.67.3
+rich==15.0.0
+click==8.4.0
+typer==0.21.2
+psutil==7.2.2
+filelock==3.29.0
+networkx==3.6.1
+shapely==2.1.2
+rtree==1.4.1
+huggingface-hub==1.15.0
+fsspec==2026.4.0
+
+# ── Docling internals (pulled as transitive deps) ─────────────────
+einops==0.8.2
+latex2mathml==3.81.0
+marko==2.2.2
+pylatexenc==2.10
+reportlab==4.5.1
+surya-ocr==0.17.1
+tree-sitter==0.25.2
+
+# ── Live Assist (FastAPI server + LangGraph workflow) ─────────────
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9    # required for FastAPI UploadFile / file uploads
+aiosqlite==0.19.0          # async SQLite for transcript storage
+sarvamai                   # Sarvam ASR / translation SDK
+langchain-core>=0.3.0,<0.4
+langchain-openai>=0.3.0,<0.4
+langchain-community>=0.3.0,<0.4
+langgraph>=0.3.0,<0.5
+# chromadb removed — ChromaDBRetriever replaced by pipeline.query()
+

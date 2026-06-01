@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Finideas Live STT Bridge",
+  "version": "1.0.0",
+  "description": "Capture Google Meet tab audio and microphone audio, then stream stereo PCM16 to the local websocket STT server.",
+  "permissions": [
+    "activeTab",
+    "offscreen",
+    "storage",
+    "tabCapture"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:8089 ws://localhost:8089;"
+  }
+}

@@ -1,0 +1,17 @@
+.git/
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+**/node_modules/
+**/dist/
+**/build/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite3
+**/data/
+**/chroma_db/
+**/*.docx
+**/.DS_Store
+

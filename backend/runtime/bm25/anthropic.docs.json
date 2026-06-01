@@ -1,0 +1,420 @@
+[
+  {
+    "chunk_id": "40139f70-1362-407f-91db-45293726c4eb",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "Complete JS Course Syllabus"
+    ],
+    "text": "## Complete JS Course Syllabus\n\n## 📦 Chapter 1: Variables & Declarations\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## 🧠 What are Variables?\n\nVariables are containers that hold data.\n\nThey help us store, reuse, and update information in JavaScript - from simple values like numbers to complex data like arrays and objects.\n\nThink of a variable as a box with a name on it. You can put something inside it (a value), and later check or change what's inside.\n\nIn JavaScript, you create these boxes using keywords: var , let , or const .\n\n## 🧪 var, let, and const - Line-by-Line Comparison\n\n- 🧓 var - Old and risky\n\n- Scoped to functions , not blocks\n\n- Can be redeclared and reassigned\n\n- Hoisted to the top with undefined value\n\njs var score = 10; var score = 20; // OK",
+    "page_start": 1,
+    "page_end": 1
+  },
+  {
+    "chunk_id": "3f954f96-b499-4439-af7f-2700ece2f0b1",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧑💻 let - Modern and safe"
+    ],
+    "text": "## 🧑💻 let - Modern and safe\n\n- Scoped to blocks ( {} )\n\njs\n\n- Can be reassigned but not redeclared\n\n- Hoisted, but stays in the Temporal Dead Zone (TDZ)\n\n- 🔐 const - Constant values\n\n- Scoped to blocks\n\n- Cannot be reassigned or redeclared\n\n- Value must be assigned at declaration\n\n- TDZ applies here too\n\n- 👉 But: If const holds an object/array, you can still change its contents:\n\njs let age = 25; age = 30; // ✅ let age = 40; // ❌ Error (same block)\n\njs const PI = 3.14; PI = 3.14159; // ❌ Error\n\njs const student = { name: \"Riya\" }; student.name = \"Priya\"; // ✅ OK student = {}; // ❌ Error\n\n## 🔥 Scope in Real Life\n\n- Block Scope → Code inside {} like in loops, if , etc.\n\n- Function Scope → Code inside a function\n\n- let and const follow block scope.\n\n- var ignores block scope - which leads to bugs.\n\n{ var x = 5; let y = 10; const z = 15; } console.log(x); // ✅ 5 console.log(y); // ❌ ReferenceError console.log(z); // ❌ ReferenceError\n\n## 🧨 Hoisting\n\nJavaScript prepares memory before running code.\n\nIt moves all declarations to the top - this is called hoisting .\n\n## But:\n\n- var is hoisted and set to undefined\n\n- let and const are hoisted but not initialized - so accessing them early gives ReferenceError\n\njs console.log(a); // undefined var a = 10; js console.log(b); // ❌ ReferenceError let b = 20;\n\n## ⚠ Common Confusions (JS Reality Checks)\n\n- const doesn't make things fully constant. It protects the variable , not the value .\n\n- var is outdated - it's better to use let and const .\n\n- let and const behave similarly, but const gives more safety - use it when you're not planning to reassign.\n\n## 🧠 Mindset Rule\n\nUse by default. Use only when you plan to change the value.\n\nconst let Avoid var - it belongs to the past.",
+    "page_start": 1,
+    "page_end": 4
+  },
+  {
+    "chunk_id": "dd1f235c-a625-4eec-9bc6-054ac1e13b50",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧪 Practice Zone"
+    ],
+    "text": "## 🧪 Practice Zone\n\n- Declare your name and city using const , and your age using let .\n\n- Try this and observe the result:\n\n- Guess the output:\n\n- Create a const object and add a new key to it - does it work?\n\n- Try accessing a let variable before declaring it - what error do you see?\n\n- Change a const array by pushing a value. Will it throw an error?\n\njs let x = 5; let x = 10;\n\njs console.log(count); var count = 42;\n\n## 🧠 Chapter 2: Data Types + Type System\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## 📦 What Are Data Types?\n\nIn JavaScript, every value has a type.\n\nThese types define what kind of data is being stored - a number, text, boolean, object, etc.\n\nThere are two categories:\n\n- Primitive types - stored directly.\n\n- Reference types - stored as memory references.",
+    "page_start": 4,
+    "page_end": 5
+  },
+  {
+    "chunk_id": "d8f03720-7e30-4287-897a-8503a9372c07",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## 🔹 Primitive Data Types\n\n- String → Text\n\n- Number → Any numeric value\n\n- Boolean → True or false\n\n- Undefined → Variable declared but not assigned\n\n- Null → Intentional empty value\n\n- Symbol → Unique identifier (rarely used)\n\n- BigInt → Very large integers\n\n\"hello\" , 'Sheryians'\n\n3 , -99 , 3.14\n\ntrue , false\n\nlet x; → x is undefined\n\nlet x = null;\n\n123456789012345678901234567890n\n\n## 🔹 Reference Data Types\n\n- Object → { name: \"Harsh\", age: 26 }\n\n- function greet() {}\n\nArray → [10, 20, 30] Function →",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "f443e41c-5ccb-44c3-a465-65fb78e30548",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "let x = null;\n\n123456789012345678901234567890n\n\n## 🔹 Reference Data Types\n\n- Object → { name: \"Harsh\", age: 26 }\n\n- function greet() {}\n\nArray → [10, 20, 30] Function →\n\nThese are not copied directly, but by reference.\n\n## 🔍 typeof Operator\n\nUsed to check the data type of a value:\n\njs typeof \"Sheryians\" // \"string\" typeof 99 // \"number\" typeof true // \"boolean\" typeof undefined // \"undefined\" typeof null // \"object\" ← known bug typeof [] // \"object\" typeof {} // \"object\" typeof function(){} // \"function\"\n\nNote: typeof null === \"object\" is a bug, but has existed since the early days of JS.\n\n## 🔁 Type Coercion (Auto-Conversion)\n\nJavaScript auto-converts types in some operations:\n\njs \"5\" + 1 // \"51\"   → number converted to string \"5\" - 1 // 4      → string converted to number true + 1 // 2 null + 1 // 1 undefined + 1 // NaN",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "1ddb7d1c-f6cb-4ddb-bebe-ba0ca7ceee74",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "js \"5\" + 1 // \"51\"   → number converted to string \"5\" - 1 // 4      → string converted to number true + 1 // 2 null + 1 // 1 undefined + 1 // NaN\n\n## 🚨 Loose vs Strict Equality\n\n- == compares value with type conversion\n\n- === compares value + type (no conversion)\n\njs 5 == \"5\" // true 5 === \"5\" // false\n\nAlways prefer === for accurate comparisons.\n\n## 🧪 NaN - Not a Number\n\njs typeof NaN // \"number\"\n\nEven though it means 'Not a Number' , NaN is actually of type number .\n\nThis is because operations like 0 / 0 or parseInt(\"abc\") still produce a numeric result just an invalid one.\n\n## 🔦 Truthy and Falsy Values\n\n## Falsy values :\n\nfalse , 0 , \"\" , null , undefined , NaN Everything else is truthy , including: \"0\" , \"false\" , [] , {} , function(){}\n\n## Example:\n\njs if (\"0\") { console.log(\"Runs\"); // \"0\" is a non-empty string = truthy }",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "d4826715-abdd-40cc-ac37-3771d0534b36",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## Example:\n\njs if (\"0\") { console.log(\"Runs\"); // \"0\" is a non-empty string = truthy }\n\n## 🧠 Mindset\n\nJavaScript will often auto-convert types behind the scenes.\n\nAlways stay aware of what data type youʼre working with.\n\n## ❓ Common Confusions\n\n- typeof null is \"object\" - this is a bug.\n\n- undefined means the variable was never assigned. null means you intentionally set it to \"nothing\".\n\n- '5' + 1 is \"51\" but '5' - 1 is 4 .\n\n## 🧪 Practice Zone\n\n## 1. Predict the output:\n\njs console.log(null + 1); console.log(\"5\" + 3); console.log(\"5\" - 3); console.log(true + false);\n\n## 2. Check types:",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "1b6f522f-b980-41a3-bce9-24ae3070bb49",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## 🧪 Practice Zone\n\n## 1. Predict the output:\n\njs console.log(null + 1); console.log(\"5\" + 3); console.log(\"5\" - 3); console.log(true + false);\n\n## 2. Check types:\n\njs console.log(typeof []); console.log(typeof null); console.log(typeof 123n);\n\n## 3. Truthy or Falsy?\n\njs\n\nconsole.log(Boolean(0)); // falsy console.log(Boolean(\"0\")); // truthy console.log(Boolean([])); // truthy console.log(Boolean(undefined)); // falsy\n\n- Write a function isEmpty(value) that checks if a given value is null , undefined , or \"\"\n\n- Compare with loose vs strict:\n\njs console.log(5 == \"5\"); // ?\n\nconsole.log(5 === \"5\"); // ?\n\n## 🔄 Chapter 3: Operators",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "dcc601f0-c8c8-424b-a009-93335910f98a",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "- Write a function isEmpty(value) that checks if a given value is null , undefined , or \"\"\n\n- Compare with loose vs strict:\n\njs console.log(5 == \"5\"); // ?\n\nconsole.log(5 === \"5\"); // ?\n\n## 🔄 Chapter 3: Operators\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## 🔧 What are Operators?\n\nOperators are special symbols or keywords in JavaScript used to perform operations on values (operands).\n\nYouʼll use them in calculations, comparisons, logic, assignments, and even type checks.\n\nThink of them as the verbs of your code - they act on data .\n\n## ➕ Arithmetic Operators\n\nUsed for basic math.\n\njs + // addition -// subtraction * // multiplication\n\n.\n\n/   // division % // modulus (remainder) ** // exponentiation (power)\n\n## Example:\n\njs let a = 10, b = 3; console.log(a + b); // 13 console.log(a % b); // 1 console.log(2 ** 3); // 8\n\n## 🧮 Assignment Operators\n\nAssign values to variables.\n\njs = // assigns value += // a += b  => a = a + b -= // a -= b *=, /=, %=\n\n## Example:",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "d133863d-c346-428d-aa06-192938726d01",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## 🧮 Assignment Operators\n\nAssign values to variables.\n\njs = // assigns value += // a += b  => a = a + b -= // a -= b *=, /=, %=\n\n## Example:\n\njs let score = 5; score += 2; // score = 7\n\n## 🧾 Comparison Operators\n\nUsed in condition checks.\n\njs\n\n== // equal (loose) === // equal (strict - value + type) != // not equal (loose) !== // not equal (strict) > < >= <=\n\n## Example:\n\njs console.log(5 == \"5\"); // true console.log(5 === \"5\"); // false\n\n## ✅ Logical Operators\n\nUsed to combine multiple conditions.\n\njs && // AND - both must be true || // OR - either one true !\n\n// NOT - negates truthiness\n\n## Example:",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "5a86b8b1-c54f-4320-9e63-8f451c8f69d7",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "js console.log(5 == \"5\"); // true console.log(5 === \"5\"); // false\n\n## ✅ Logical Operators\n\nUsed to combine multiple conditions.\n\njs && // AND - both must be true || // OR - either one true !\n\n// NOT - negates truthiness\n\n## Example:\n\njs let age = 20, hasID = true; if (age >= 18 && hasID) { console.log(\"Allowed\"); }\n\n## 🌀 Unary Operators\n\nUsed on a single operand.\n\n+ // tries to convert to number -// negates ++ // increment --// decrement typeof // returns data type\n\n## Example:\n\njs let x = \"5\"; console.log(+x); // 5 (converted to number)\n\n## ❓ Ternary Operator (Conditional)\n\nShorthand for if...else\n\njs condition ?\n\nvalueIfTrue : valueIfFalse\n\n## Example:\n\njs let score = 80; let grade = score > 50 ?",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "fb24f8dd-8ff8-4a1f-b3c5-775215e0a72a",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## ❓ Ternary Operator (Conditional)\n\nShorthand for if...else\n\njs condition ?\n\nvalueIfTrue : valueIfFalse\n\n## Example:\n\njs let score = 80; let grade = score > 50 ?\n\n\"Pass\" : \"Fail\";\n\n## 🧪 typeof Operator\n\njs // \"object\" (JS bug)\n\ntypeof 123 // \"number\" typeof \"hi\" // \"string\" typeof null typeof [] // \"object\"\n\ntypeof {} // \"object\" typeof function(){}\n\n## 🧠 Mindset\n\nOperators make logic happen.\n\nThey help you make decisions , combine values , and create expressions .\n\nTry to:\n\n- Use === instead of == to avoid type bugs.\n\n- Use ternary for quick decisions, not complex ones.\n\n- Think in truthy/falsy when using && , || , ! .\n\n## ❓ Common Confusions\n\n- \"5\" + 1 is \"51\" (string concat), but \"5\" - 1 is 4 (number subtract)\n\n- !!value is a quick trick to convert anything into a boolean",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "1e870dd8-4186-4f27-94d0-ccd33e122a46",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## ❓ Common Confusions\n\n- \"5\" + 1 is \"51\" (string concat), but \"5\" - 1 is 4 (number subtract)\n\n- !!value is a quick trick to convert anything into a boolean\n\n- Pre-increment ( ++i ) vs post-increment ( i++ ) return different results\n\n## 🧪 Practice Zone\n\n## 1. Predict:\n\njs console.log(\"10\" + 1); console.log(\"10\" - 1); console.log(true + false); console.log(!!\n\n\"Sheryians\");\n\n## 2. Convert using unary +\n\njs\n\n// \"function\"\n\nlet str = \"42\"; let num = +str; console.log(num); // 42\n\n## 3. Use ternary:\n\njs let age = 17; let msg = age >= 18 ?",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "b3144f67-d3f2-47dd-9315-acd52c511149",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "\"Sheryians\");\n\n## 2. Convert using unary +\n\njs\n\n// \"function\"\n\nlet str = \"42\"; let num = +str; console.log(num); // 42\n\n## 3. Use ternary:\n\njs let age = 17; let msg = age >= 18 ?\n\n\"Adult\" : \"Minor\";\n\n## 4. Build a calculator:\n\njs // Using switch + arithmetic operators function calc(a, b, operator) { // +, -, *, / }\n\n## 5. Score logic:\n\njs let marks = 82; // Print \"Excellent\", \"Good\", \"Average\", or \"Fail\" based on ranges\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## 🚦 What is Control Flow?\n\nControl flow decides which code runs , when it runs , and how many times it runs .\n\nIt's like decision-making + direction in your JavaScript program.\n\nIf operators are the verbs, control flow is the traffic signal .\n\n## 🧱 if, else if, else",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "e070bc1f-5683-426f-be85-48bb4262c7dd",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "Control flow decides which code runs , when it runs , and how many times it runs .\n\nIt's like decision-making + direction in your JavaScript program.\n\nIf operators are the verbs, control flow is the traffic signal .\n\n## 🧱 if, else if, else\n\njs\n\nif (condition) { // runs if condition is true } else if (anotherCondition) { // runs if first was false, second is true } else { // runs if none are true }\n\n## ✅ Example:\n\njs } else if (marks >= 75) {\n\nlet marks = 78; if (marks >= 90) { console.log(\"A\"); console.log(\"B\"); } else { console.log(\"C\"); }\n\n## 🌀 switch-case\n\nGreat for checking one variable against many values .\n\njs\n\nswitch (value) {\n\ncase value1: // code break; case value2: // code break; default: // fallback }\n\n## ✅ Example:",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "2c0cd288-415d-4d3d-a41d-edb6ee4e1aca",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## 🌀 switch-case\n\nGreat for checking one variable against many values .\n\njs\n\nswitch (value) {\n\ncase value1: // code break; case value2: // code break; default: // fallback }\n\n## ✅ Example:\n\njs let fruit = \"apple\"; switch (fruit) { case \"banana\": console.log(\"Yellow\"); break; case \"apple\": console.log(\"Red\"); break; default: console.log(\"Unknown\"); }\n\n## Early Return Pattern\n\nUsed in functions to exit early if some condition fails.\n\njs function checkAge(age) { if (age < 18) return \"Denied\"; return \"Allowed\"; }\n\nThis avoids deep nesting and makes logic cleaner.\n\n## ⚠ Common Confusions\n\n- switch-case executes all cases after a match unless you break\n\n- else if chain works top-down - order matters\n\n- You can use truthy/falsy values directly in if\n\n## 🧠 Mindset\n\nControl flow = conditional storytelling .\n\nIt helps your program make choices and respond differently to different inputs.\n\nWrite readable branches.\n\nAvoid nesting too deep - use early return if needed.\n\n## 🧪 Practice Zone\n\n- Student grade logic:\n\njs",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "8c723049-7b77-44c3-9773-fa3e75c5b850",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## 🧠 Mindset\n\nControl flow = conditional storytelling .\n\nIt helps your program make choices and respond differently to different inputs.\n\nWrite readable branches.\n\nAvoid nesting too deep - use early return if needed.\n\n## 🧪 Practice Zone\n\n- Student grade logic:\n\njs\n\n// Write a program that prints A, B, C, D, or F based on marks\n\n- Rock-paper-scissors:\n\njs\n\n// Given player1 and player2's choice, print winner or draw\n\n## 3. Login message:\n\njs\n\nlet isLoggedIn = true; let isAdmin = false; // Show different messages based on combination\n\n## 4. Weather advice:\n\njs let weather = \"rainy\"; // Use switch-case to print what to wear\n\n## 5. Age checker:\n\njs // Return \"Kid\", \"Teen\", \"Adult\", or \"Senior\"",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "51d49b10-caa5-4925-adbe-cae93898e486",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "## 4. Weather advice:\n\njs let weather = \"rainy\"; // Use switch-case to print what to wear\n\n## 5. Age checker:\n\njs // Return \"Kid\", \"Teen\", \"Adult\", or \"Senior\"\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## Why Loops?\n\nLoops help us repeat code without rewriting it.\n\nIf a task needs to be done multiple times (e.g., printing 1-10, going through an array, or checking each character in a string), loops are the backbone .\n\n## for Loop\n\njs for (let i = 0; i < 5; i++) { console.log(i); }\n\n- Start from i = 0\n\n- Run till i < 5\n\n- Increase i each time\n\n## while Loop\n\njs console.log(i);\n\nlet i = 0; while (i < 5) { i++; }\n\n- Condition is checked before running",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "a328fa10-fee0-4711-9faf-d8cb6ab04e48",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "- Start from i = 0\n\n- Run till i < 5\n\n- Increase i each time\n\n## while Loop\n\njs console.log(i);\n\nlet i = 0; while (i < 5) { i++; }\n\n- Condition is checked before running\n\n## do-while Loop\n\njs console.log(i);\n\nlet i = 0; do { i++; } while (i < 5);\n\n- Runs at least once , even if condition is false\n\n## ⛔ break and continue\n\n- break : Exit loop completely\n\n- continue : Skip current iteration and move to next\n\njs for (let i = 1; i <= 5; i++) { if (i === 3) continue; console.log(i); // Skips 3 }\n\n## 🌀 for-of - Arrays & Strings",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "5cff5262-9c44-404c-b626-0b6218f41848",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "- continue : Skip current iteration and move to next\n\njs for (let i = 1; i <= 5; i++) { if (i === 3) continue; console.log(i); // Skips 3 }\n\n## 🌀 for-of - Arrays & Strings\n\njs for (let char of \"Sheryians\") { console.log(char); }\n\n- Works on anything iterable (arrays, strings)\n\n## 🧱 forEach - Arrays\n\njs let nums = [10, 20, 30]; nums.forEach((num) => { console.log(num); });\n\n- Cleaner than for for arrays, but you canʼt break/return\n\n## for-in - Objects (and arrays if needed)\n\njs let user = { name: \"Harsh\", age: 26 }; for (let key in user) { console.log(key, user[key]); }",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "2080914d-b7c5-44ee-bcb4-e65984a87740",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🔹 Primitive Data Types"
+    ],
+    "text": "- Cleaner than for for arrays, but you canʼt break/return\n\n## for-in - Objects (and arrays if needed)\n\njs let user = { name: \"Harsh\", age: 26 }; for (let key in user) { console.log(key, user[key]); }\n\n- Goes over keys in objects\n\n## ⚠ Common Confusions\n\n- for-in is for objects, not arrays (may cause issues with unexpected keys)\n\n- forEach can't use break or continue\n\n- while and do-while work best when number of iterations is unknown\n\n## 🧠 Mindset\n\nLoops = data processor .\n\nUse the right loop for the job:\n\n- for = best for numbers/indexes\n\n- for-of = for array values\n\n- for-in = for object keys\n\n- while = for unpredictable conditions",
+    "page_start": 5,
+    "page_end": 21
+  },
+  {
+    "chunk_id": "9a529687-5278-47ce-820e-35eb0d0d42ff",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧪 Practice Zone"
+    ],
+    "text": "## 🧪 Practice Zone\n\n- Print 1 to 10 using for\n\n- Print even numbers between 1 to 20\n\n- Reverse a string using loop\n\n- Sum of all numbers in an array\n\n- Print all characters of a name using for-of\n\n- Print all object keys and values using for-in\n\n- Use continue to skip a specific number\n\n- Guess number game - use while to ask until correct\n\n- Pattern: Print triangle using *\n\n- Sum of even numbers in an array using forEach\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## 🧠 What are Functions?\n\nFunctions are blocks of reusable logic .\n\nInstead of repeating the same task again and again, wrap it in a function and reuse it with different inputs .\n\nThink of a function like a vending machine:\n\n- Input: you give money + item code\n\n- Output: it gives you the item\n\n- Logic: hidden inside\n\n## 🛠 Function Declarations\n\nfunction greet() { console.log(\"Welcome to Sheryians!\"); } greet();\n\nYou define it once, then call it whenever needed.\n\n## 🧾 Parameters vs Arguments\n\njs function greet(name) { console.log(\"Hello \" + name); } greet(\"Harsh\");\n\n- name is a parameter\n\n- \"Harsh\" is the argument you pass\n\n## 🌀 Return Values\n\njs function sum(a, b) { return a + b; } let total = sum(5, 10); // total is 15\n\n- return sends back a result to wherever the function was called\n\n- After return , function exits\n\n## 🧰 Function Expressions\n\njs const greet = function () { console.log(\"Hello!\"); };\n\n- Functions stored in variables\n\n- Cannot be hoisted (you canʼt call them before theyʼre defined)\n\n## 🏹 Arrow Functions\n\njs const greet = () => { console.log(\"Hi!\"); };\n\n- Cleaner syntax\n\n- No own this , no arguments object",
+    "page_start": 21,
+    "page_end": 24
+  },
+  {
+    "chunk_id": "279dcceb-8b71-4255-bb04-625fadb23aee",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧂 Default + Rest + Spread"
+    ],
+    "text": "## 🧂 Default + Rest + Spread\n\njs function multiply(a = 1, b = 1) { return a * b; } function sum(...nums) { return nums.reduce((acc, val) => acc + val, 0); } let nums = [1, 2, 3]; console.log(sum(...nums)); // Spread\n\n- a = 1\n\n- ...nums\n\n- ...nums\n\n→ default parameter → rest parameter (in call) → spread operator\n\n## 🎯 First-Class Functions\n\nJavaScript treats functions as values :\n\n- Assign to variables\n\n- Pass as arguments\n\n- Return from other functions\n\njs function shout(msg) { return msg.toUpperCase(); } function processMessage(fn) { console.log(fn(\"hello\")); } processMessage(shout);\n\n## 🧠 Higher-Order Functions (HOF)\n\nFunctions that accept other functions or return functions .",
+    "page_start": 24,
+    "page_end": 31
+  },
+  {
+    "chunk_id": "f2b2390d-f54c-4e09-952a-4a675eda009b",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧂 Default + Rest + Spread"
+    ],
+    "text": "- Pass as arguments\n\n- Return from other functions\n\njs function shout(msg) { return msg.toUpperCase(); } function processMessage(fn) { console.log(fn(\"hello\")); } processMessage(shout);\n\n## 🧠 Higher-Order Functions (HOF)\n\nFunctions that accept other functions or return functions .\n\njs function createMultiplier(x) { return function (y) { return x * y; }; } let double = createMultiplier(2); console.log(double(5)); // 10\n\n## 🔐 Closures & Lexical Scope\n\nClosures = when a function remembers its parent scope , even after the parent has finished.\n\njs function outer() { let count = 0; return function () { count++; console.log(count); }; } let counter = outer(); counter(); // 1 counter(); // 2\n\nEven after outer is done, counter still remembers count .\n\n## ⚡ IIFE - Immediately Invoked Function Expression\n\njs (function () { console.log(\"Runs immediately\"); })();\n\nUsed to create private scope instantly .",
+    "page_start": 24,
+    "page_end": 31
+  },
+  {
+    "chunk_id": "0be61c87-a17c-4c4f-8fc5-2b17bfee1615",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧂 Default + Rest + Spread"
+    ],
+    "text": "Even after outer is done, counter still remembers count .\n\n## ⚡ IIFE - Immediately Invoked Function Expression\n\njs (function () { console.log(\"Runs immediately\"); })();\n\nUsed to create private scope instantly .\n\n## 🚀 Hoisting: Declarations vs Expressions\n\njs hello(); // works function hello() { console.log(\"Hi\"); }\n\nconst greet = function () {\n\ngreet(); // error console.log(\"Hi\"); };\n\n- Declarations are hoisted\n\n- Expressions are not\n\n## ⚠ Common Confusions\n\n- Arrow functions donʼt have their own this\n\n- You canʼt break out of forEach\n\n- Closures often trap old variable values\n\n- Return vs console.log - don't mix them up",
+    "page_start": 24,
+    "page_end": 31
+  },
+  {
+    "chunk_id": "92467d32-5d60-47d1-9589-d265f41dcfd8",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧂 Default + Rest + Spread"
+    ],
+    "text": "- Declarations are hoisted\n\n- Expressions are not\n\n## ⚠ Common Confusions\n\n- Arrow functions donʼt have their own this\n\n- You canʼt break out of forEach\n\n- Closures often trap old variable values\n\n- Return vs console.log - don't mix them up\n\n## Mindset\n\nFunctions are your logic blocks + memory holders (via closure) .\n\nThey keep your code clean, DRY , and reusable .\n\n## 🧪 Practice Zone\n\n- Write a BMI calculator function\n\n- Create a greet function with default name\n\n- Sum all numbers using rest parameter\n\n- Create a closure counter function\n\n- Write a function that returns another function\n\n- Use a function to log even numbers in array\n\n- Create a pure function to add tax\n\n- Use IIFE to show welcome message\n\n- Write a discount calculator (HOF style)\n\n- Make a toUpperCase transformer using HOF\n\n## 🧰 Chapter 7: Arrays",
+    "page_start": 24,
+    "page_end": 31
+  },
+  {
+    "chunk_id": "f835831a-ea79-4765-a7c1-e72400e9d459",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧂 Default + Rest + Spread"
+    ],
+    "text": "- Use a function to log even numbers in array\n\n- Create a pure function to add tax\n\n- Use IIFE to show welcome message\n\n- Write a discount calculator (HOF style)\n\n- Make a toUpperCase transformer using HOF\n\n## 🧰 Chapter 7: Arrays\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## 🧠 What is an Array?\n\nAn array is like a row of boxes , where each box holds a value and has an index (0, 1, 2…).\n\nArrays help you store multiple values in a single variable - numbers, strings, or even objects/functions.\n\njs let fruits = [\"apple\", \"banana\", \"mango\"];\n\n## 🏗 Creating & Accessing Arrays\n\njs let marks = [90, 85, 78]; console.log(marks[1]); // 85 marks[2] = 80; // Update index 2\n\n- Indexing starts from 0\n\n- You can access, update, or overwrite values by index\n\n## Common Array Methods\n\n## 🧱 Modifiers (Change original array)\n\njs let arr = [1, 2, 3, 4]; arr.push(5); // Add to end arr.pop(); // Remove last arr.shift(); // Remove first arr.unshift(0); // Add to start arr.splice(1, 2); // Remove 2 items starting at index 1 arr.reverse(); // Reverse order\n\n## 🔍 Extractors (Don't modify original array)",
+    "page_start": 24,
+    "page_end": 31
+  },
+  {
+    "chunk_id": "2d09b095-c59c-48eb-b751-050f2025834f",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧂 Default + Rest + Spread"
+    ],
+    "text": "## 🔍 Extractors (Don't modify original array)\n\njs let newArr = arr.slice(1, 3); // Copy from index 1 to 2 arr.sort(); // Lexical sort by default\n\n## Iteration Methods\n\n## map()\n\nReturns a new array with modified values.\n\njs let prices = [100, 200, 300]; let taxed = prices.map(p => p * 1.18);\n\nfilter()\n\nFilters out elements based on a condition.\n\njs let nums = [1, 2, 3, 4]; let even = nums.filter(n => n % 2 === 0);\n\n## reduce()\n\nReduces the array to a single value.\n\njs let total = nums.reduce((acc, val) => acc + val, 0);\n\n## forEach()\n\nPerforms an action for each element (but returns undefined).\n\njs nums.forEach(n => console.log(n));\n\n## find(), some(), every()\n\njs nums.find(n => n > 2); // First match nums.some(n => n > 5); // At least one true nums.every(n => n > 0); // All true\n\n## ✂ Destructuring & Spread",
+    "page_start": 24,
+    "page_end": 31
+  },
+  {
+    "chunk_id": "bae5c16b-1181-4a87-b83f-0f2d06daf84e",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧂 Default + Rest + Spread"
+    ],
+    "text": "## find(), some(), every()\n\njs nums.find(n => n > 2); // First match nums.some(n => n > 5); // At least one true nums.every(n => n > 0); // All true\n\n## ✂ Destructuring & Spread\n\njs let [first, second] = [\"a\", \"b\", \"c\"]; let newArr = [...nums, 99]; // Spread to copy & add\n\n## ⚠ Common Confusions\n\n- splice changes original array, slice does not\n\n- forEach vs map : map returns a new array\n\n- sort() converts values to strings unless compareFn is provided:\n\njs [10, 2, 3].sort(); // [10, 2, 3] → [\"10\", \"2\", \"3\"] → wrong order\n\n## Use:\n\njs arr.sort((a, b) => a - b); // Correct numeric sort\n\n## Mindset\n\nArrays are structured, transformable data .\n\nYou loop over them, transform them, filter them, or reduce them - all to control what shows up in your UI or logic.",
+    "page_start": 24,
+    "page_end": 31
+  },
+  {
+    "chunk_id": "7111edd3-6a8c-42ee-a0dd-7a5411ab4ada",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧪 Practice Zone"
+    ],
+    "text": "## 🧪 Practice Zone\n\n- Create an array of student names and print each\n\n- Filter even numbers from an array\n\n- Map prices to include GST (18%)\n\n- Reduce salaries to calculate total payroll\n\n- Find the first student with grade A\n\n- Write a function to reverse an array\n\n- Sort array of ages in ascending order\n\n- Destructure first two elements of an array\n\n- Use some() to check if any student failed\n\n- Use spread to copy and add new item\n\n## 🧱 Chapter 8: Objects\n\n(JavaScript - Learn Everything Series by Sheryians Coding School)\n\n## 🧠 What is an Object?\n\nObjects in JavaScript are like real-world records - a collection of key-value pairs .\n\nThey help us store structured data (like a student, a product, or a user profile).\n\njs let student = { name: \"Ravi\", age: 21, isEnrolled: true };",
+    "page_start": 31,
+    "page_end": 36
+  },
+  {
+    "chunk_id": "48ac1ca2-6c6f-416b-9cd3-c7bbfe867dda",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧪 Practice Zone"
+    ],
+    "text": "Objects in JavaScript are like real-world records - a collection of key-value pairs .\n\nThey help us store structured data (like a student, a product, or a user profile).\n\njs let student = { name: \"Ravi\", age: 21, isEnrolled: true };\n\n## 🔑 Key-Value Structure\n\n- Keys are always strings (even if you write them as numbers or identifiers)\n\n- Values can be anything - string, number, array, object, function, etc.\n\njs console.log(student[\"name\"]); // Ravi console.log(student.age); // 21\n\n## 📍 Dot vs Bracket Notation\n\n- Use dot notation for fixed key names\n\n- Use bracket notation for dynamic or multi-word keys\n\njs student[\"full name\"] = \"Ravi Kumar\"; // ✅ student.course = \"JavaScript\"; // ✅\n\n## 🏗 Nesting and Deep Access\n\nObjects can have nested objects (objects inside objects)\n\njs let user = { name: \"Amit\", address: { city: \"Delhi\", pincode: 110001 } }; console.log(user.address.city); // Delhi",
+    "page_start": 31,
+    "page_end": 36
+  },
+  {
+    "chunk_id": "2eb4a20b-8498-4bb4-89ad-86c4333ce9d2",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧪 Practice Zone"
+    ],
+    "text": "## 🏗 Nesting and Deep Access\n\nObjects can have nested objects (objects inside objects)\n\njs let user = { name: \"Amit\", address: { city: \"Delhi\", pincode: 110001 } }; console.log(user.address.city); // Delhi\n\n## ✂ Object Destructuring\n\nYou can extract values directly:\n\njs let { name, age } = student;\n\nFor nested objects:\n\njs let { address: { city } } = user;\n\n## Looping Through Objects\n\n## for-in loop\n\nconsole.log(key, student[key]);\n\njs for (let key in student) { }\n\n## Object.keys(), Object.values(), Object.entries()\n\njs Object.keys(student); // [\"name\", \"age\", \"isEnrolled\"] Object.entries(student); // [[\"name\", \"Ravi\"], [\"age\", 21], ...]\n\n## 📦 Copying Objects\n\n## Shallow Copy (one level deep)\n\njs let newStudent = { ...student }; let newOne = Object.assign({}, student);",
+    "page_start": 31,
+    "page_end": 36
+  },
+  {
+    "chunk_id": "1092a829-8a94-4af9-b700-3d893e0d02d2",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "🧪 Practice Zone"
+    ],
+    "text": "## 📦 Copying Objects\n\n## Shallow Copy (one level deep)\n\njs let newStudent = { ...student }; let newOne = Object.assign({}, student);\n\n## Deep Copy (nested levels)\n\njs let deepCopy = JSON.parse(JSON.stringify(user));\n\n- ❗ Note: JSON-based copy works only for plain data (no functions, undefined, etc.)\n\n## ❓ Optional Chaining\n\nAvoids errors if a nested property is undefined:\n\njs console.log(user?.address?.city); // Delhi console.log(user?.profile?.email); // undefined (no error)\n\n## 🧠 Computed Properties\n\nYou can use variables as keys:\n\njs let key = \"marks\"; let report = { [key]: 89 };\n\n## ⚠ Common Confusions\n\n- Shallow copy copies only the first level\n\n- for-in includes inherited keys (be cautious!)\n\n- delete obj.key removes the property\n\n- Spread ≠ deep copy\n\n## 🧠 Mindset\n\nObjects are structured state - perfect for modeling anything complex: a user, a form, a product, etc.\n\nUse destructuring, chaining, and dynamic keys wisely.",
+    "page_start": 31,
+    "page_end": 36
+  },
+  {
+    "chunk_id": "f345cabb-4d9c-4be7-a944-a77c3e91afec",
+    "doc_id": "14aad05b-4cf2-4570-b1ef-9dbfbdcd7076",
+    "source_filename": "JS_Learn_Everything.pdf",
+    "section_path": [
+      "Practice Zone"
+    ],
+    "text": "## Practice Zone\n\n- Create an object for a book (title, author, price)\n\n- Access properties using both dot and bracket\n\n- Write a nested object (user with address and location)\n\n- Destructure name and age from a student object\n\n- Loop through keys and values of an object\n\n- Convert object to array using Object.entries()\n\n- Copy an object using spread operator\n\n- Create a deep copy of an object with nested structure\n\n- Use optional chaining to safely access deep values\n\n- Use a variable as a key using computed properties",
+    "page_start": 36,
+    "page_end": 36
+  },
+  {
+    "chunk_id": "4a19b1a6-4721-4b45-a2fa-103500ff1b97",
+    "doc_id": "2f9abdd5-d8ac-4930-a387-bd3e3e492ba3",
+    "source_filename": "resume_5_intern.pdf",
+    "section_path": [
+      "Education"
+    ],
+    "text": "## Education\n\n## Experience\n\n- Agmentis.ai\n\nAI Engineer Intern\n\nMar. 2026 - Present Remote\n\n- -Implemented rule-based chunking pipeline for document processing to improve retrieval quality in RAG systems\n\n- -Developed Hindi RAG pipeline, handling multilingual embeddings and query-response generation\n\n- -Built a Chrome extension for interacting with the RAG system in real-time",
+    "page_start": 1,
+    "page_end": 1
+  },
+  {
+    "chunk_id": "3bde9100-3d7d-49b7-8ab4-d61e4dc3dd44",
+    "doc_id": "2f9abdd5-d8ac-4930-a387-bd3e3e492ba3",
+    "source_filename": "resume_5_intern.pdf",
+    "section_path": [
+      "Projects"
+    ],
+    "text": "## Projects\n\n- Langchain-repo-analyzer\n\nLangChain, Chainlit, Mistral AI, ChromaDB\n\nOct. 2025\n\nGithub\n\n- -Developed an LLM-powered code understanding system that analyzes entire GitHub repositories and answers complex, context-aware questions in natural language.\n\n- -Implemented a complete retrieval-augmented generation (RAG) pipeline - including repository ingestion, document chunking, embeddings storage (ChromaDB) , and intelligent retrieval for accurate Q&A.\n\n- -Built an interactive Chainlit-based frontend for seamless real-time interaction, enabling users to explore functions, architecture, and logic flow within large codebases.\n\n- Hierarchical Agentic Workflow Engine",
+    "page_start": 1,
+    "page_end": 1
+  },
+  {
+    "chunk_id": "d8bf295c-7b46-4934-af43-e561be339262",
+    "doc_id": "2f9abdd5-d8ac-4930-a387-bd3e3e492ba3",
+    "source_filename": "resume_5_intern.pdf",
+    "section_path": [
+      "Personal Project"
+    ],
+    "text": "## Personal Project\n\nDec. 2025\n\nGitHub\n\n- -Implemented a hierarchical multi-agent system using LangGraph with explicit Supervisor-Worker control flow.\n\n- -Built tool-augmented agent teams (research, search, scraping, writing) using LangChain + Gemini LLMs .\n\n- -Ensured async-safe execution and rate limiting with asyncio for reliable agent orchestration.\n\n- -Integrated a Chainlit UI separating internal agent traces from final user outputs (production-style design).\n\n- GenAI Video Editor\n\nIITIsoc Project\n\n- -Integrated AnimeGAN and ReCoNet for real-time video style transfer\n\n- -Implemented RIFE interpolation to generate smooth slow-motion sequences\n\n- -Customized PyTorch pipelines and modified core scripts for multi-model video editing\n\n## Technical Skills\n\n- Programming Languages : Python, C++\n\n- Frameworks and Libraries : FastAPI, TensorFlow, PyTorch, OpenCV, LangChain, Hugging Face, SQLAlchemy\n\n- Developer Tools : Git, GitHub, PostgreSQL, VS Code, Colab, Postman\n\n- Concepts and APIs : RAG, Prompt Engineering, SQL, REST APIs, Data Structures and Algorithms(DSA), JWT\n\n## Key courses taken\n\n- Maths & ML Foundations : Calculus, Linear Algebra, Differential Equations, Numerical Methods & Complex Analysis\n\n- Programming & Data : Computer Programming (C++), Industrial Data Analytics\n\n## Achievements\n\n- Solved 400+ DSA & Competitive Programming Problems ,Check out my coding journey on LeetCode , Codeforces , and GFG -covered arrays, trees, dynamic programming, and graphs\n\n- JEE Advanced 2023 ,Secured All India Rank 7298\n\n- Line Follower Robot (Team Project) ,Led mechanical design; built obstacle-lifting mechanism and achieved high-speed navigation\n\nJul. 2025\n\nGithub\n\n## Manvendra Singh\n\nRoll No.:230003041\n\nB.Tech\n\nMechanical Engineering\n\nIndian Institute Of Technology, Indore\n\n+91-8957667243 manavsingh.1708@gmail.com me230003041@iiti.ac.in GitHub\n\nlinkedin.com/in/LINKEDINUSERID\n\n2024-25\n\n2023\n\n2024",
+    "page_start": 1,
+    "page_end": 1
+  },
+  {
+    "chunk_id": "d67c04d8-0b7e-47fc-8a52-795bdab95f0b",
+    "doc_id": "2f9abdd5-d8ac-4930-a387-bd3e3e492ba3",
+    "source_filename": "resume_5_intern.pdf",
+    "section_path": [
+      "Education"
+    ],
+    "text": "[TABLE page 1]\n\n| Degree/Certificate   | Institute/Board                       | CGPA/Percentage   | Year         |\n|----------------------|---------------------------------------|-------------------|--------------|\n| B.Tech. Major        | Indian Institute of Technology Indore | 8.08              | 2023-Present |\n| Senior Secondary     | CBSE Board                            | 95.8%             | 2022         |\n| Secondary            | CBSE Board                            | 94.6%             | 2020         |",
+    "page_start": 1,
+    "page_end": 1
+  }
+]

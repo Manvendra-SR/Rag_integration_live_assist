@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/chroma_db:/app/chroma_db
+
+  stream:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.stream
+    env_file:
+      - .env
+    ports:
+      - "8089:8089"
+    depends_on:
+      - api
+    volumes:
+      - ./backend/data:/app/data

@@ -1,0 +1,17 @@
+{
+  "name": "sales-assistant-electron",
+  "version": "1.0.0",
+  "description": "Live Assist MVP desktop audio frontend",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.3.3"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "node-fetch": "^3.3.2",
+    "ws": "^8.20.1"
+  }
+}

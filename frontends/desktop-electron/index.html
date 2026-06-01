@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src ws://localhost:8089 ws://127.0.0.1:8089 http://127.0.0.1:8000 http://localhost:8000; media-src *; img-src 'self' data:;">
+  <title>Sales Assistant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f13;
+      color: #e8e8e8;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+      gap: 20px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+    .version   { font-size: 11px; color: #555; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #1a1a22;
+      border: 1px solid #2a2a38;
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .status-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #444;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.connecting { background: #f5a623; animation: pulse 1s infinite; }
+    .status-dot.listening  { background: #4caf50; animation: pulse 1.5s infinite; }
+    .status-dot.error      { background: #e53935; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+    #status-text { font-size: 14px; color: #aaa; flex: 1; }
+
+    /* ── Controls ── */
+    .controls { display: flex; gap: 12px; }
+    button {
+      padding: 10px 28px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    button:not(:disabled):active { transform: scale(0.97); }
+
+    #btn-start { background: #4caf50; color: #fff; }
+    #btn-stop  { background: #e53935; color: #fff; }
+    #btn-clear { background: #2a2a38; color: #aaa; margin-left: auto; }
+
+    /* ── Workspace tabs ── */
+    .tabs {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid #2a2a38;
+    }
+    .tab-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: transparent;
+      color: #81858e;
+      border: 1px solid transparent;
+      border-radius: 8px 8px 0 0;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .tab-button.active {
+      color: #f2f4f8;
+      border-color: #3a78ff;
+      box-shadow: inset 0 0 0 1px #64b5f6;
+      background: #11141b;
+    }
+    .tab-icon { font-size: 15px; line-height: 1; }
+
+    .panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #1a1a22;
+      border: 1px solid #2a2a38;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .panel[hidden] { display: none; }
+    .panel-label {
+      font-size: 11px; color: #555;
+      padding: 10px 16px 6px;
+      border-bottom: 1px solid #2a2a38;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .feed {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      color: #444;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    /* ── Transcript entries ── */
+    .entry { display: flex; flex-direction: column; gap: 3px; animation: fadeIn 0.2s ease; }
+    .entry.live-entry .entry-text { opacity: 0.72; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .entry-speaker {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .entry-speaker.customer { color: #64b5f6; }
+    .entry-speaker.manager  { color: #81c784; }
+    .entry-speaker.assistant { color: #ffca28; }
+    .entry-speaker.agent { color: #c5cae9; }
+    .entry-text {
+      font-size: 14px; color: #ddd;
+      line-height: 1.5;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #22222e;
+    }
+    .entry-text.customer { border-left: 3px solid #1976d2; }
+    .entry-text.manager  { border-left: 3px solid #388e3c; }
+    .entry-text.assistant { border-left: 3px solid #f9a825; background: #292613; }
+    .entry-text.agent { border-left: 3px solid #7986cb; background: #202333; }
+    .entry-text.pending { opacity: 0.65; font-style: italic; }
+
+    .assist-input-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-top: 1px solid #2a2a38;
+      background: #161820;
+    }
+    #assist-input {
+      flex: 1;
+      min-width: 0;
+      height: 44px;
+      border-radius: 8px;
+      border: 1px solid #2f3440;
+      background: #12151c;
+      color: #f2f4f8;
+      padding: 0 14px;
+      font-size: 14px;
+      outline: none;
+    }
+    #assist-input:focus { border-color: #4caf50; }
+    #btn-assist-send {
+      background: #0fa36b;
+      color: #fff;
+      min-width: 92px;
+      height: 44px;
+      padding: 0 18px;
+    }
+
+    /* ── Error box ── */
+    #error-box {
+      display: none;
+      background: #2d1b1b;
+      border: 1px solid #6d2020;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #ef9a9a;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SOURCE PICKER MODAL
+    ═══════════════════════════════════════════════════════ */
+    #source-modal {
+      display: none;              /* shown by renderer.js */
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-box {
+      background: #18181f;
+      border: 1px solid #2e2e40;
+      border-radius: 14px;
+      width: 680px;
+      max-width: 95vw;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    }
+
+    .modal-header {
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid #2a2a38;
+    }
+    .modal-header h2 { font-size: 16px; font-weight: 600; color: #fff; }
+    .modal-header p  { font-size: 12px; color: #666; margin-top: 4px; line-height: 1.5; }
+
+    /* Source grid */
+    #source-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .source-loading {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: #555;
+      font-size: 13px;
+      padding: 32px 0;
+    }
+
+    .source-tile {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background: #22222e;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .source-tile:hover      { background: #2a2a3a; border-color: #3a3a55; }
+    .source-tile.selected   { border-color: #4caf50; background: #1a2a1f; }
+
+    .source-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #111;
+    }
+    .source-name {
+      font-size: 11px;
+      color: #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: center;
+    }
+
+    /* Modal footer buttons */
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      padding: 14px 22px;
+      border-top: 1px solid #2a2a38;
+      justify-content: flex-end;
+      align-items: center;
+    }
+    .modal-footer .btn-skip {
+      margin-right: auto;
+      background: transparent;
+      border: 1px solid #333;
+      color: #777;
+      font-size: 13px;
+      padding: 8px 18px;
+    }
+    .modal-footer .btn-skip:hover { color: #aaa; border-color: #555; }
+    .modal-footer .btn-cancel {
+      background: #2a2a38;
+      color: #aaa;
+      font-size: 13px;
+      padding: 8px 18px;
+    }
+    .modal-footer .btn-confirm {
+      background: #4caf50;
+      color: #fff;
+      font-size: 13px;
+      padding: 8px 22px;
+    }
+    .modal-footer .btn-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Sales Assistant</h1>
+    <span class="version" id="version-label">Electron prototype</span>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Ready. Click "Start Listening" to begin.</span>
+  </div>
+
+  <div id="error-box"></div>
+
+  <div class="controls">
+    <button id="btn-start">▶ Start Listening</button>
+    <button id="btn-stop" disabled>■ Stop</button>
+    <button id="btn-clear">Clear</button>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Live Assist workspace">
+    <button class="tab-button active" id="tab-assist" data-tab="assist" role="tab" aria-selected="true">
+      <span class="tab-icon">✧</span>
+      Live Assist
+    </button>
+    <button class="tab-button" id="tab-transcript" data-tab="transcript" role="tab" aria-selected="false">
+      <span class="tab-icon">▤</span>
+      Live Transcription
+    </button>
+  </div>
+
+  <section class="panel" id="assist-panel" role="tabpanel" aria-labelledby="tab-assist">
+    <div class="panel-label">Live Assist</div>
+    <div class="feed" id="assist-feed">
+      <div class="empty-state" id="assist-empty-state">
+        Live suggestions will appear here<br/>
+        <span style="font-size:12px;opacity:0.6">Real-time prompts, objection handlers, and answers — newest at the bottom.</span>
+      </div>
+    </div>
+    <div class="assist-input-bar">
+      <input id="assist-input" type="text" placeholder="Ask the assistant during the call..." autocomplete="off" />
+      <button id="btn-assist-send">Send</button>
+    </div>
+  </section>
+
+  <section class="panel" id="transcript-panel" role="tabpanel" aria-labelledby="tab-transcript" hidden>
+    <div class="panel-label">Live Transcription</div>
+    <div class="feed" id="transcript">
+      <div class="empty-state" id="empty-state">
+        Transcript will appear here<br/>
+        <span style="font-size:12px;opacity:0.6">Customer = system audio (left ch) · You = microphone (right ch)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Source Picker Modal ── -->
+  <div id="source-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>🎧 Select Customer Audio Source</h2>
+        <p>
+          Pick the window or screen where the customer call is happening.<br/>
+          On Windows, system audio (loopback) is captured — all audio on the selected screen will be included.
+        </p>
+      </div>
+
+      <div id="source-grid">
+        <div class="source-loading">Loading windows…</div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-skip" id="btn-skip-tab">Skip — Mic only</button>
+        <button class="btn-cancel" id="btn-pick-cancel">Cancel</button>
+        <button class="btn-confirm" id="btn-pick-confirm" disabled>Start Listening</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
