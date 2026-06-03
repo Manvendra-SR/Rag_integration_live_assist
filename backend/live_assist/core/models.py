@@ -58,6 +58,8 @@ class ManualQuestionRequest(BaseModel):
     timestamp: Optional[Union[int, float, str]] = None
     source: str = "agent_manual_question"
     metadata: dict[str, Any] = Field(default_factory=dict)
+    doc_filter: Optional[str] = None          # document_id to restrict retrieval
+    retrieval_mode: Optional[str] = None       # semantic | bm25 | hybrid | reranked
 
 
 class TranscriptTurn(BaseModel):
@@ -82,3 +84,35 @@ class AssistResult(BaseModel):
     answer: str = ""
     summary_result: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DocumentUploadResponse(BaseModel):
+    status: str
+    job_id: str
+    filename: str
+    message: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    filename: str
+    status: str
+    stages: list[dict[str, Any]] = Field(default_factory=list)
+    stage_stats: dict[str, Any] = Field(default_factory=dict)
+    submitted_at: float
+    chunk_count: int = 0
+    total_tokens: int = 0
+    elapsed_seconds: float = 0.0
+    error: Optional[str] = None
+
+
+class DocumentInfo(BaseModel):
+    document_id: str
+    user_id: str
+    filename: str
+    status: str
+    uploaded_at: float
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentInfo] = Field(default_factory=list)

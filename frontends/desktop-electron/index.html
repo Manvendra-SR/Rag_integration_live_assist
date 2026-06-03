@@ -20,118 +20,75 @@
     }
 
     /* ── Header ── */
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
+    .header { display: flex; align-items: center; justify-content: space-between; }
     .header h1 { font-size: 18px; font-weight: 600; color: #fff; }
     .version   { font-size: 11px; color: #555; }
 
     /* ── Status bar ── */
     .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: #1a1a22;
-      border: 1px solid #2a2a38;
-      border-radius: 10px;
-      padding: 12px 16px;
+      display: flex; align-items: center; gap: 10px;
+      background: #1a1a22; border: 1px solid #2a2a38;
+      border-radius: 10px; padding: 12px 16px;
     }
     .status-dot {
-      width: 9px; height: 9px;
-      border-radius: 50%;
-      background: #444;
-      flex-shrink: 0;
-      transition: background 0.3s;
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #444; flex-shrink: 0; transition: background 0.3s;
     }
     .status-dot.connecting { background: #f5a623; animation: pulse 1s infinite; }
     .status-dot.listening  { background: #4caf50; animation: pulse 1.5s infinite; }
     .status-dot.error      { background: #e53935; }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.4; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     #status-text { font-size: 14px; color: #aaa; flex: 1; }
 
     /* ── Controls ── */
     .controls { display: flex; gap: 12px; }
     button {
-      padding: 10px 28px;
-      border-radius: 8px;
-      border: none;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
+      padding: 10px 28px; border-radius: 8px; border: none;
+      font-size: 14px; font-weight: 500; cursor: pointer;
       transition: opacity 0.2s, transform 0.1s;
     }
     button:disabled { opacity: 0.35; cursor: not-allowed; }
     button:not(:disabled):active { transform: scale(0.97); }
-
     #btn-start { background: #4caf50; color: #fff; }
     #btn-stop  { background: #e53935; color: #fff; }
     #btn-clear { background: #2a2a38; color: #aaa; margin-left: auto; }
 
-    /* ── Workspace tabs ── */
+    /* ── Tabs ── */
     .tabs {
-      display: flex;
-      align-items: center;
-      gap: 14px;
+      display: flex; align-items: center; gap: 14px;
       border-bottom: 1px solid #2a2a38;
     }
     .tab-button {
-      display: inline-flex;
-      align-items: center;
-      gap: 9px;
-      background: transparent;
-      color: #81858e;
-      border: 1px solid transparent;
-      border-radius: 8px 8px 0 0;
-      padding: 12px 16px;
-      font-size: 14px;
-      font-weight: 650;
+      display: inline-flex; align-items: center; gap: 9px;
+      background: transparent; color: #81858e;
+      border: 1px solid transparent; border-radius: 8px 8px 0 0;
+      padding: 12px 16px; font-size: 14px; font-weight: 650;
     }
     .tab-button.active {
-      color: #f2f4f8;
-      border-color: #3a78ff;
-      box-shadow: inset 0 0 0 1px #64b5f6;
-      background: #11141b;
+      color: #f2f4f8; border-color: #3a78ff;
+      box-shadow: inset 0 0 0 1px #64b5f6; background: #11141b;
     }
     .tab-icon { font-size: 15px; line-height: 1; }
 
+    /* ── Panels ── */
     .panel {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      background: #1a1a22;
-      border: 1px solid #2a2a38;
-      border-radius: 12px;
-      overflow: hidden;
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      background: #1a1a22; border: 1px solid #2a2a38;
+      border-radius: 12px; overflow: hidden;
     }
     .panel[hidden] { display: none; }
     .panel-label {
-      font-size: 11px; color: #555;
-      padding: 10px 16px 6px;
+      font-size: 11px; color: #555; padding: 10px 16px 6px;
       border-bottom: 1px solid #2a2a38;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      text-transform: uppercase; letter-spacing: 0.08em;
     }
     .feed {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      padding: 14px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      flex: 1; min-height: 0; overflow-y: auto;
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
     }
     .empty-state {
-      margin: auto;
-      text-align: center;
-      color: #444;
-      font-size: 14px;
-      line-height: 1.8;
+      margin: auto; text-align: center;
+      color: #444; font-size: 14px; line-height: 1.8;
     }
 
     /* ── Transcript entries ── */
@@ -143,179 +100,186 @@
     }
     .entry-speaker {
       font-size: 11px; font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      text-transform: uppercase; letter-spacing: 0.06em;
     }
-    .entry-speaker.customer { color: #64b5f6; }
-    .entry-speaker.manager  { color: #81c784; }
+    .entry-speaker.customer  { color: #64b5f6; }
+    .entry-speaker.manager   { color: #81c784; }
     .entry-speaker.assistant { color: #ffca28; }
-    .entry-speaker.agent { color: #c5cae9; }
+    .entry-speaker.agent     { color: #c5cae9; }
     .entry-text {
-      font-size: 14px; color: #ddd;
-      line-height: 1.5;
-      padding: 8px 12px;
-      border-radius: 8px;
-      background: #22222e;
+      font-size: 14px; color: #ddd; line-height: 1.5;
+      padding: 8px 12px; border-radius: 8px; background: #22222e;
     }
-    .entry-text.customer { border-left: 3px solid #1976d2; }
-    .entry-text.manager  { border-left: 3px solid #388e3c; }
+    .entry-text.customer  { border-left: 3px solid #1976d2; }
+    .entry-text.manager   { border-left: 3px solid #388e3c; }
     .entry-text.assistant { border-left: 3px solid #f9a825; background: #292613; }
-    .entry-text.agent { border-left: 3px solid #7986cb; background: #202333; }
-    .entry-text.pending { opacity: 0.65; font-style: italic; }
+    .entry-text.agent     { border-left: 3px solid #7986cb; background: #202333; }
+    .entry-text.pending   { opacity: 0.65; font-style: italic; }
 
+    /* ── Assist input bar ── */
     .assist-input-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 14px;
-      border-top: 1px solid #2a2a38;
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; border-top: 1px solid #2a2a38;
       background: #161820;
     }
     #assist-input {
-      flex: 1;
-      min-width: 0;
-      height: 44px;
-      border-radius: 8px;
-      border: 1px solid #2f3440;
-      background: #12151c;
-      color: #f2f4f8;
-      padding: 0 14px;
-      font-size: 14px;
-      outline: none;
+      flex: 1; min-width: 0; height: 44px; border-radius: 8px;
+      border: 1px solid #2f3440; background: #12151c; color: #f2f4f8;
+      padding: 0 14px; font-size: 14px; outline: none;
     }
     #assist-input:focus { border-color: #4caf50; }
     #btn-assist-send {
-      background: #0fa36b;
-      color: #fff;
-      min-width: 92px;
-      height: 44px;
-      padding: 0 18px;
+      background: #0fa36b; color: #fff;
+      min-width: 92px; height: 44px; padding: 0 18px;
     }
 
     /* ── Error box ── */
     #error-box {
-      display: none;
-      background: #2d1b1b;
-      border: 1px solid #6d2020;
-      border-radius: 8px;
-      padding: 12px 16px;
-      font-size: 13px;
-      color: #ef9a9a;
+      display: none; background: #2d1b1b;
+      border: 1px solid #6d2020; border-radius: 8px;
+      padding: 12px 16px; font-size: 13px; color: #ef9a9a;
     }
 
-    /* ═══════════════════════════════════════════════════════
+    /* ══════════════════════════════════════════
        SOURCE PICKER MODAL
-    ═══════════════════════════════════════════════════════ */
+    ══════════════════════════════════════════ */
     #source-modal {
-      display: none;              /* shown by renderer.js */
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.75);
-      backdrop-filter: blur(4px);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      z-index: 100; align-items: center; justify-content: center;
     }
-
     .modal-box {
-      background: #18181f;
-      border: 1px solid #2e2e40;
-      border-radius: 14px;
-      width: 680px;
-      max-width: 95vw;
-      max-height: 80vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+      background: #18181f; border: 1px solid #2e2e40;
+      border-radius: 14px; width: 680px; max-width: 95vw;
+      max-height: 80vh; display: flex; flex-direction: column;
+      overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.6);
     }
-
-    .modal-header {
-      padding: 18px 22px 14px;
-      border-bottom: 1px solid #2a2a38;
-    }
+    .modal-header { padding: 18px 22px 14px; border-bottom: 1px solid #2a2a38; }
     .modal-header h2 { font-size: 16px; font-weight: 600; color: #fff; }
     .modal-header p  { font-size: 12px; color: #666; margin-top: 4px; line-height: 1.5; }
-
-    /* Source grid */
     #source-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 10px;
-      padding: 16px;
-      overflow-y: auto;
-      flex: 1;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px; padding: 16px; overflow-y: auto; flex: 1;
     }
-
     .source-loading {
-      grid-column: 1 / -1;
-      text-align: center;
-      color: #555;
-      font-size: 13px;
-      padding: 32px 0;
+      grid-column: 1 / -1; text-align: center;
+      color: #555; font-size: 13px; padding: 32px 0;
     }
-
     .source-tile {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      padding: 8px;
-      border-radius: 10px;
-      border: 2px solid transparent;
-      background: #22222e;
-      cursor: pointer;
+      display: flex; flex-direction: column; gap: 6px; padding: 8px;
+      border-radius: 10px; border: 2px solid transparent;
+      background: #22222e; cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
     }
-    .source-tile:hover      { background: #2a2a3a; border-color: #3a3a55; }
-    .source-tile.selected   { border-color: #4caf50; background: #1a2a1f; }
-
+    .source-tile:hover    { background: #2a2a3a; border-color: #3a3a55; }
+    .source-tile.selected { border-color: #4caf50; background: #1a2a1f; }
     .source-thumb {
-      width: 100%;
-      aspect-ratio: 16/9;
-      object-fit: cover;
-      border-radius: 6px;
-      background: #111;
+      width: 100%; aspect-ratio: 16/9; object-fit: cover;
+      border-radius: 6px; background: #111;
     }
     .source-name {
-      font-size: 11px;
-      color: #ccc;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-align: center;
+      font-size: 11px; color: #ccc;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
     }
-
-    /* Modal footer buttons */
     .modal-footer {
-      display: flex;
-      gap: 10px;
-      padding: 14px 22px;
-      border-top: 1px solid #2a2a38;
-      justify-content: flex-end;
-      align-items: center;
+      display: flex; gap: 10px; padding: 14px 22px;
+      border-top: 1px solid #2a2a38; justify-content: flex-end; align-items: center;
     }
     .modal-footer .btn-skip {
-      margin-right: auto;
-      background: transparent;
-      border: 1px solid #333;
-      color: #777;
-      font-size: 13px;
-      padding: 8px 18px;
+      margin-right: auto; background: transparent;
+      border: 1px solid #333; color: #777; font-size: 13px; padding: 8px 18px;
     }
     .modal-footer .btn-skip:hover { color: #aaa; border-color: #555; }
-    .modal-footer .btn-cancel {
-      background: #2a2a38;
-      color: #aaa;
-      font-size: 13px;
-      padding: 8px 18px;
-    }
-    .modal-footer .btn-confirm {
-      background: #4caf50;
-      color: #fff;
-      font-size: 13px;
-      padding: 8px 22px;
-    }
+    .modal-footer .btn-cancel { background: #2a2a38; color: #aaa; font-size: 13px; padding: 8px 18px; }
+    .modal-footer .btn-confirm { background: #4caf50; color: #fff; font-size: 13px; padding: 8px 22px; }
     .modal-footer .btn-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ══════════════════════════════════════════
+       RAG SETTINGS PANEL
+    ══════════════════════════════════════════ */
+    .rag-panel-body {
+      flex: 1; overflow-y: auto; padding: 18px 20px;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .rag-section-title {
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: #5a6070; margin-bottom: 10px;
+    }
+    .rag-field-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .rag-label { font-size: 13px; color: #9aa0ab; min-width: 120px; flex-shrink: 0; }
+    .rag-select, .rag-input {
+      flex: 1; min-width: 0; height: 36px; border-radius: 7px;
+      border: 1px solid #2f3440; background: #12151c; color: #f2f4f8;
+      padding: 0 12px; font-size: 13px; outline: none; appearance: none;
+    }
+    .rag-select:focus, .rag-input:focus { border-color: #3a78ff; }
+    .rag-select option { background: #12151c; }
+    .rag-badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 5px; font-weight: 600;
+      background: #1e2636; color: #64b5f6; border: 1px solid #1e3255;
+    }
+    .rag-badge.ok   { background: #0e2b1f; color: #4caf50; border-color: #1a4a30; }
+    .rag-badge.warn { background: #2b1e0e; color: #f5a623; border-color: #4a3010; }
+    .rag-badge.err  { background: #2b0e0e; color: #ef5350; border-color: #5a1515; }
+
+    /* Document list */
+    .doc-list { display: flex; flex-direction: column; gap: 8px; }
+    .doc-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; background: #14161f;
+      border: 1px solid #252535; border-radius: 9px; animation: fadeIn 0.2s ease;
+    }
+    .doc-icon { font-size: 18px; flex-shrink: 0; }
+    .doc-info { flex: 1; min-width: 0; }
+    .doc-name { font-size: 13px; color: #dde; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .doc-meta { font-size: 11px; color: #556; margin-top: 2px; }
+    .doc-status-badge {
+      font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0;
+    }
+    .doc-status-badge.ready     { background: #0e2b1f; color: #4caf50; border: 1px solid #1a4a30; }
+    .doc-status-badge.ingesting { background: #2b2810; color: #f5c623; border: 1px solid #4a4012; }
+    .doc-status-badge.error     { background: #2b0e0e; color: #ef5350; border: 1px solid #5a1515; }
+    .doc-select-btn {
+      font-size: 11px; padding: 4px 10px; border-radius: 5px;
+      background: transparent; border: 1px solid #2a3050; color: #8090c0;
+      cursor: pointer; transition: background 0.15s, color 0.15s; flex-shrink: 0;
+    }
+    .doc-select-btn:hover  { background: #1e2840; color: #c0d0ff; }
+    .doc-select-btn.active { background: #1a2a4f; color: #64b5f6; border-color: #3a78ff; }
+
+    /* Upload zone */
+    .upload-zone {
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 8px; border: 2px dashed #2a2a48;
+      border-radius: 10px; padding: 24px; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s; background: #11111a;
+    }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: #4caf50; background: #0e1e15; }
+    .upload-zone input { display: none; }
+    .upload-zone-text { font-size: 13px; color: #667; }
+    .upload-zone-sub  { font-size: 11px; color: #445; }
+    .upload-progress {
+      display: none; background: #14161f;
+      border: 1px solid #252535; border-radius: 9px; padding: 12px 14px;
+    }
+    .upload-progress-text { font-size: 13px; color: #9aa; }
+    .progress-bar-wrap {
+      height: 4px; background: #1e2030; border-radius: 2px;
+      margin-top: 8px; overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50, #00e676);
+      border-radius: 2px; transition: width 0.3s; width: 0%;
+    }
+    .rag-refresh-btn {
+      font-size: 12px; padding: 5px 14px;
+      background: #1a1a30; color: #7080b0;
+      border: 1px solid #2a2a45; border-radius: 6px; cursor: pointer;
+    }
+    .rag-refresh-btn:hover { background: #222240; color: #90a0d0; }
   </style>
 </head>
 <body>
@@ -347,8 +311,13 @@
       <span class="tab-icon">▤</span>
       Live Transcription
     </button>
+    <button class="tab-button" id="tab-rag" data-tab="rag" role="tab" aria-selected="false">
+      <span class="tab-icon">⚙</span>
+      RAG Settings
+    </button>
   </div>
 
+  <!-- ── Live Assist Panel ── -->
   <section class="panel" id="assist-panel" role="tabpanel" aria-labelledby="tab-assist">
     <div class="panel-label">Live Assist</div>
     <div class="feed" id="assist-feed">
@@ -363,6 +332,7 @@
     </div>
   </section>
 
+  <!-- ── Live Transcription Panel ── -->
   <section class="panel" id="transcript-panel" role="tabpanel" aria-labelledby="tab-transcript" hidden>
     <div class="panel-label">Live Transcription</div>
     <div class="feed" id="transcript">
@@ -370,6 +340,68 @@
         Transcript will appear here<br/>
         <span style="font-size:12px;opacity:0.6">Customer = system audio (left ch) · You = microphone (right ch)</span>
       </div>
+    </div>
+  </section>
+
+  <!-- ── RAG Settings Panel ── -->
+  <section class="panel" id="rag-panel" role="tabpanel" aria-labelledby="tab-rag" hidden>
+    <div class="panel-label">RAG Settings &amp; Documents</div>
+    <div class="rag-panel-body">
+
+      <!-- Retrieval Settings -->
+      <div>
+        <div class="rag-section-title">Retrieval Settings</div>
+        <div class="rag-field-row" style="margin-bottom:12px;">
+          <span class="rag-label">Retrieval Mode</span>
+          <select id="rag-mode-select" class="rag-select">
+            <option value="">Default (from server)</option>
+            <option value="semantic">Semantic — vector search only</option>
+            <option value="bm25">BM25 — keyword search only</option>
+            <option value="hybrid">Hybrid — semantic + BM25 fused</option>
+            <option value="reranked">Reranked — hybrid + cross-encoder</option>
+          </select>
+        </div>
+        <div class="rag-field-row">
+          <span class="rag-label">Doc Filter</span>
+          <select id="rag-doc-filter-select" class="rag-select">
+            <option value="">All Documents</option>
+          </select>
+          <span id="rag-filter-badge" class="rag-badge">All docs</span>
+        </div>
+        <div style="margin-top:10px; font-size:11px; color:#446; line-height:1.7;">
+          ℹ Retrieval Mode and Doc Filter apply to manual questions typed below. Live transcript
+          answers always use the server's default settings.
+        </div>
+      </div>
+
+      <!-- Document Upload -->
+      <div>
+        <div class="rag-section-title">Upload Document</div>
+        <label class="upload-zone" id="upload-zone" for="file-input">
+          <div style="font-size:28px;">📄</div>
+          <div class="upload-zone-text">Drop a PDF here or click to browse</div>
+          <div class="upload-zone-sub">Only PDF files are supported · max 50 MB</div>
+          <input type="file" id="file-input" accept=".pdf" />
+        </label>
+        <div class="upload-progress" id="upload-progress">
+          <div class="upload-progress-text" id="upload-progress-text">Uploading…</div>
+          <div class="progress-bar-wrap"><div class="progress-bar" id="upload-progress-bar"></div></div>
+        </div>
+      </div>
+
+      <!-- Indexed Documents -->
+      <div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <div class="rag-section-title" style="margin-bottom:0;">Indexed Documents</div>
+          <button class="rag-refresh-btn" id="btn-refresh-docs">⟳ Refresh</button>
+        </div>
+        <div class="doc-list" id="doc-list">
+          <div class="empty-state" style="padding:20px 0; font-size:13px; color:#445;">
+            No documents indexed yet.
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -383,11 +415,9 @@
           On Windows, system audio (loopback) is captured — all audio on the selected screen will be included.
         </p>
       </div>
-
       <div id="source-grid">
         <div class="source-loading">Loading windows…</div>
       </div>
-
       <div class="modal-footer">
         <button class="btn-skip" id="btn-skip-tab">Skip — Mic only</button>
         <button class="btn-cancel" id="btn-pick-cancel">Cancel</button>

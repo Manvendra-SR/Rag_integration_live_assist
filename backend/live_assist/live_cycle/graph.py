@@ -350,7 +350,8 @@ def enrich_query(state: LiveAssistState) -> dict[str, Any]:
     )
     if not isinstance(response, RewriteQuestion):
         response = RewriteQuestion(rewriten_question="", product="")
-    enriched_query = (response.rewriten_question or "").strip()
+    # If the LLM returned nothing, keep the original question so retrieval still runs
+    enriched_query = (response.rewriten_question or state.question or "").strip()
     enrich_duration_ms = (time.perf_counter() - started_at) * 1000
     api_timing(
         state.session_id,
@@ -373,7 +374,7 @@ def enrich_query(state: LiveAssistState) -> dict[str, Any]:
         speaker=state.speaker,
         duration_ms=(time.perf_counter() - started_at) * 1000,
         raw_question=state.question,
-        enriched_query=response.rewriten_question or "",
+        enriched_query=enriched_query,
         product=response.product or "",
     )
     product_context = _merge_product_context(state.product_context, response.product or "")
@@ -393,7 +394,7 @@ def enrich_query(state: LiveAssistState) -> dict[str, Any]:
 def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
     started_at = time.perf_counter()
     api_timing(state.session_id, "retrieval_started", chunk_id=state.chunk_id, turn_id=state.turn_id)
-    query_text = state.rewriten_question
+    query_text = (state.rewriten_question or state.question or "").strip()
     if not query_text:
         api_timing(
             state.session_id,
@@ -406,25 +407,52 @@ def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
         return {
             "context": "",
             "rag_top_chunks": [],
+            "rag_raw_chunks": [],
             "rag_retrieve_duration_ms": 0.0,
         }
 
-    # ── Call the new RAG pipeline ─────────────────────────────────────────────
+    # ── Call the new configurable retriever ─────────────────────────────────────────────
     try:
-        from pipeline import query as pipeline_query
+        from live_assist.providers.rag.retriever import build_rag_retriever
 
-        pipeline_result = pipeline_query(
-            query_text,
-            mode=getattr(settings, "pipeline_rag_mode", "reranked"),
-            top_k=config["NUMBER_OF_CHUNKS_TO_RETRIVE"],
-        )
+        retriever = build_rag_retriever(settings)
+        user_id = state.user_id if hasattr(state, "user_id") and state.user_id else settings.live_feedback_user_id
+        doc_filter = (state.doc_filter or "").strip() or None
+        retrieval_mode_override = (state.retrieval_mode or "").strip() or None
+
+        if getattr(settings, "rag_provider", "legacy_chroma") == "advanced":
+            pipeline_result = retriever.retrieve(
+                query_text,
+                user_id=user_id,
+                doc_filter=doc_filter,
+                mode=retrieval_mode_override,
+            )
+        else:
+            # Fallback for legacy
+            pipeline_result = {}
+            results = retriever.hybrid_search(query_text, k=settings.rag_top_k)
+            if results:
+                context = "\n\n".join([doc.page_content for doc, _ in results])
+                top_chunks = [doc.page_content[:300] for doc, _ in results[:3]]
+                pipeline_result = {
+                    "context": context,
+                    "rag_top_chunks": top_chunks,
+                    "rag_retrieve_duration_ms": (time.perf_counter() - started_at) * 1000,
+                }
+            else:
+                pipeline_result = {
+                    "context": "",
+                    "rag_top_chunks": [],
+                    "rag_retrieve_duration_ms": (time.perf_counter() - started_at) * 1000,
+                }
+
     except Exception as exc:
         debug_log(f"[RAG Pipeline Error] {type(exc).__name__}: {exc}")
         pipeline_result = {"status": "error", "error": str(exc)}
 
     rag_duration_ms = (time.perf_counter() - started_at) * 1000
 
-    if pipeline_result.get("status") == "error" or not pipeline_result.get("answer"):
+    if pipeline_result.get("status") == "error" or not pipeline_result.get("context"):
         api_timing(
             state.session_id,
             "retrieval_completed",
@@ -441,30 +469,15 @@ def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
         return {
             "context": "",
             "rag_top_chunks": [],
+            "rag_raw_chunks": [],
             "rag_retrieve_duration_ms": rag_duration_ms,
         }
 
-    # Build context from citations (each citation has excerpt + section + page)
-    citations = pipeline_result.get("citations", [])
-    if citations:
-        context_parts = []
-        for c in citations:
-            excerpt = c.get("excerpt", "").strip()
-            section = c.get("section", "").strip()
-            page = c.get("page", "")
-            source = c.get("source_filename", "").strip()
-            if excerpt:
-                header = f"[{source} | p{page} | {section}]" if section else f"[{source} | p{page}]"
-                context_parts.append(f"{header}\n{excerpt}")
-        context = "\n\n".join(context_parts)
-    else:
-        # Fallback: use the pipeline's assembled answer as context
-        context = pipeline_result.get("answer", "")
-
-    # Top chunks for UI display (first 3 citation excerpts)
-    rag_top_chunks = [
-        c.get("excerpt", "")[:300] for c in citations[:3] if c.get("excerpt")
-    ]
+    context = pipeline_result.get("context", "")
+    rag_top_chunks = pipeline_result.get("rag_top_chunks", [])
+    
+    # Calculate approx chunk count for logging (if available, else fallback)
+    chunks_retrieved = len(rag_top_chunks)
 
     api_timing(
         state.session_id,
@@ -472,14 +485,13 @@ def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
         chunk_id=state.chunk_id,
         turn_id=state.turn_id,
         duration_ms=f"{rag_duration_ms:.1f}",
-        chunks=len(citations),
+        chunks=chunks_retrieved,
     )
     debug_log(
         "RAG pipeline retrieval done | "
         f"duration_ms={rag_duration_ms:.1f} | "
-        f"citations={len(citations)} | "
-        f"retrieval_count={pipeline_result.get('retrieval_count', 0)} | "
-        f"mode={pipeline_result.get('mode', 'unknown')}"
+        f"chunks={chunks_retrieved} | "
+        f"mode={settings.rag_retrieval_mode}"
     )
     log_event(
         "rag_retrieved",
@@ -490,11 +502,12 @@ def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
         duration_ms=rag_duration_ms,
         query=query_text,
         product=state.product or "",
-        chunks=len(citations),
+        chunks=chunks_retrieved,
     )
     return {
         "context": context,
         "rag_top_chunks": rag_top_chunks,
+        "rag_raw_chunks": pipeline_result.get("rag_raw_chunks", []),
         "rag_retrieve_duration_ms": rag_duration_ms,
     }
 
@@ -502,7 +515,10 @@ def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
 def generate_assist_response(state: LiveAssistState) -> dict[str, Any]:
     started_at = time.perf_counter()
     api_timing(state.session_id, "final_generation_started", chunk_id=state.chunk_id, turn_id=state.turn_id)
-    if not (state.rewriten_question or "").strip():
+    # Use rewriten_question when available; fall back to the raw question so we never
+    # discard valid retrieved context just because the enricher returned nothing.
+    effective_question = (state.rewriten_question or state.question or "").strip()
+    if not effective_question:
         api_timing(
             state.session_id,
             "final_generation_completed",
@@ -536,7 +552,7 @@ def generate_assist_response(state: LiveAssistState) -> dict[str, Any]:
     """
     user_prompt = f"""
     ## Question
-    {state.rewriten_question or state.question}
+    {effective_question}
 
     ## Product
     {state.product or state.product_context}
@@ -554,7 +570,7 @@ def generate_assist_response(state: LiveAssistState) -> dict[str, Any]:
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         variables={
-            "question": state.rewriten_question or state.question,
+            "question": effective_question,
             "chat_history": get_recent_messages(
                 state.messages,
                 last_n_turns=int(config["RECENT_N_MESSAGES_CONTEXT"]),

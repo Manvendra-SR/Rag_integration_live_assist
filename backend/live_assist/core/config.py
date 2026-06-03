@@ -49,6 +49,13 @@ CONFIG_KEY_ALIASES = {
     "TRANSLATION_PROVIDER": "translation_provider",
     "LLM_PROVIDER": "llm_provider",
     "RAG_PROVIDER": "rag_provider",
+    "RAG_RETRIEVAL_MODE": "rag_retrieval_mode",
+    "RAG_PIPELINE_NAME": "rag_pipeline_name",
+    "RAG_TOP_K": "rag_top_k",
+    "RAG_CANDIDATE_LIMIT": "rag_candidate_limit",
+    "RAG_USER_SCOPE_ENABLED": "rag_user_scope_enabled",
+    "RAG_RUNTIME_DIR": "rag_runtime_dir",
+    "RAG_CHROMA_COLLECTION": "rag_chroma_collection",
     "TRANSCRIPT_STORAGE": "transcript_storage",
     "STATE_STORAGE": "state_storage",
     "LIVE_FEEDBACK_WEBHOOK_URL": "live_feedback_webhook_url",
@@ -145,11 +152,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=(
-            PROJECT_DIR / ".env",
-            BACKEND_DIR / ".env",
-            ".env",
-        ),
+        env_file=(str(PROJECT_DIR / ".env"), str(BACKEND_DIR / ".env")),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -180,10 +183,18 @@ class Settings(BaseSettings):
     asr_provider: Literal["sarvam"] = "sarvam"
     translation_provider: Literal["sarvam", "none"] = "sarvam"
     llm_provider: Literal["groq", "openai", "openai_compatible"] = "groq"
-    rag_provider: Literal["chroma", "pipeline"] = "pipeline"
-    pipeline_rag_mode: str = "reranked"   # semantic | bm25 | hybrid | reranked
+    # (removed duplicate rag_provider — see line 190 below)
     transcript_storage: Literal["sqlite"] = "sqlite"
     state_storage: Literal["sqlite", "memory"] = "sqlite"
+
+    rag_provider: Literal["legacy_chroma", "advanced"] = "advanced"
+    rag_retrieval_mode: str = "reranked"
+    rag_pipeline_name: str = "anthropic"
+    rag_top_k: int = 5
+    rag_candidate_limit: int = 20
+    rag_user_scope_enabled: bool = True
+    rag_runtime_dir: str = "runtime"
+    rag_chroma_collection: str = "LiveAssistAdvancedRAG"
 
     sarvam_api_key: str = Field(default="", alias="PYTHON_WS_SARVAM_API_KEY")
     sarvam_model: str = "saaras:v3"
@@ -313,16 +324,19 @@ class Settings(BaseSettings):
     enable_winning_pattern_context: bool = False
 
     rewrite_question_system_prompt: str = (
-        "You are a strict query rewriting and product extraction assistant for "
-        "a financial sales system. Rewrite meaningful customer questions into "
-        "complete RAG-friendly queries and identify the product if present. "
-        "Reject greetings, fillers, acknowledgements, and incomplete fragments. "
+        "You are a query rewriting assistant for a financial sales AI. "
+        "Your job is to rewrite the user's question into a clear, standalone, "
+        "retrieval-friendly query and identify the product if explicitly mentioned. "
+        "Always return a rewritten question — never return an empty question. "
+        "If the question is very short (e.g. a single word or greeting), expand it "
+        "into a complete question using context clues. "
         "Return structured output only."
     )
     rewrite_question_user_prompt: str = (
-        "Decide if the query is meaningful. If meaningful, rewrite it into a "
-        "complete query and extract product. If not meaningful, return empty "
-        "question and product."
+        "Rewrite the question into a complete, self-contained retrieval query. "
+        "If a financial product (ILTS, FGF, FinRakshak, BharatBond, SWP) is mentioned, "
+        "include it in the rewritten question and set the product field. "
+        "Always return a non-empty rewritten_question."
     )
     final_response_system_prompt: str = (
         "You are a strict, factual financial sales assistant. Generate responses "

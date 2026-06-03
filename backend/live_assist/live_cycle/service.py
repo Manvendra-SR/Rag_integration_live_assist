@@ -57,6 +57,8 @@ def _invoke_turn_workflow(
     utterance_id: str = "",
     chunk_id: int = 0,
     turn_id: int = 0,
+    doc_filter: str = "",
+    retrieval_mode: str = "",
 ) -> dict[str, Any]:
     api_timing(
         session_id,
@@ -79,6 +81,8 @@ def _invoke_turn_workflow(
                 "user_id": settings.live_feedback_user_id,
                 "session_id": session_id,
                 "manual_question": manual_question,
+                "doc_filter": doc_filter,
+                "retrieval_mode": retrieval_mode,
             },
             config=_workflow_config(session_id),
         )
@@ -166,6 +170,8 @@ async def _run_live_assist_workflow(
     utterance_id: str = "",
     chunk_id: int = 0,
     turn_id: int = 0,
+    doc_filter: str = "",
+    retrieval_mode: str = "",
 ) -> dict[str, Any]:
     started_at = time.perf_counter()
     try:
@@ -189,6 +195,8 @@ async def _run_live_assist_workflow(
             utterance_id=utterance_id,
             chunk_id=chunk_id,
             turn_id=turn_id,
+            doc_filter=doc_filter,
+            retrieval_mode=retrieval_mode,
         )
         api_timing(
             session_id,
@@ -215,6 +223,85 @@ async def _run_live_assist_workflow(
             should_generate_answer=workflow_response.get("should_generate_answer"),
         )
         invoked_status = "workflow_invoked" if workflow_response.get("should_generate_answer") else "context_updated_only"
+
+        metadata = {
+            "product": workflow_response.get("product", ""),
+            "product_context": workflow_response.get("product_context", ""),
+            "route": workflow_response.get("route", "rag_answer"),
+            "last_5_turns": workflow_response.get("last_5_turns", []),
+            "enriched_query": workflow_response.get("rewriten_question", ""),
+            "enrich_duration_ms": workflow_response.get("enrich_duration_ms", 0.0),
+            "rag_top_chunks": workflow_response.get("rag_top_chunks", []),
+            "rag_retrieve_duration_ms": workflow_response.get("rag_retrieve_duration_ms", 0.0),
+            "generation_duration_ms": workflow_response.get("generation_duration_ms", 0.0),
+            "workflow_duration_ms": (time.perf_counter() - started_at) * 1000,
+        }
+
+        # ── Write Query Log ───────────────────────────────────────────────────
+        try:
+            from live_assist.rag_pipeline.paths import LOGS_QUERY_DIR
+            from datetime import datetime
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_file = LOGS_QUERY_DIR / f"query_{session_id}_{turn_id}_{timestamp_str}.log"
+            
+            lines = [
+                "=" * 50,
+                "QUERY EXECUTION LOG",
+                f"Session ID:   {session_id}",
+                f"Turn ID:      {turn_id}",
+                f"Timestamp:    {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Total Time:   {metadata['workflow_duration_ms']:.1f}ms",
+                "=" * 50,
+                "",
+                "[QUERY PREPROCESSING (ENRICHMENT)]",
+                f"  Raw Query:        {workflow_response.get('question', '')}",
+                f"  Enriched Query:   {metadata['enriched_query']}",
+                f"  Duration:         {metadata['enrich_duration_ms']:.1f}ms",
+                "",
+                "[RETRIEVAL]",
+                f"  Route:            {metadata['route']}",
+                f"  Retrieval Mode:   {workflow_response.get('retrieval_mode', 'default')}",
+                f"  Doc Filter:       {workflow_response.get('doc_filter', 'None')}",
+                f"  Product Filter:   {metadata['product']}",
+                f"  Chunks Found:     {len(metadata['rag_top_chunks'])}",
+                f"  Duration:         {metadata['rag_retrieve_duration_ms']:.1f}ms",
+                "",
+                "[GENERATION]",
+                f"  Answer Generated: {'Yes' if answer else 'No'}",
+                f"  Duration:         {metadata['generation_duration_ms']:.1f}ms",
+                "",
+                "=" * 50,
+                "RETRIEVED CHUNKS",
+                "=" * 50,
+                ""
+            ]
+
+            raw_chunks = workflow_response.get("rag_raw_chunks", [])
+            for i, chunk in enumerate(raw_chunks, start=1):
+                doc_name = chunk.get("source_filename", "Unknown")
+                score = chunk.get("relevance_score", chunk.get("score", "N/A"))
+                if isinstance(score, float):
+                    score = f"{score:.4f}"
+                chunk_id = chunk.get("chunk_id", "N/A")
+                content = chunk.get("text_with_context", chunk.get("text", chunk.get("page_content", "")))
+                
+                lines.extend([
+                    f"[Chunk {i}]",
+                    f"Document: {doc_name}",
+                    f"Score: {score}",
+                    f"Chunk ID: {chunk_id}",
+                    "",
+                    "Content:",
+                    content,
+                    "",
+                    "-" * 50,
+                    ""
+                ])
+
+            log_file.write_text("\n".join(lines), encoding="utf-8")
+        except Exception as e:
+            print(f"Failed to write query log: {e}")
+
         return AssistResult(
             status=invoked_status,
             answer=answer,
@@ -223,18 +310,7 @@ async def _run_live_assist_workflow(
                 "conversation_turn_count": workflow_response.get("conversation_turn_count", 0),
                 "summary_turn_count": workflow_response.get("summary_turn_count", 0),
             },
-            metadata={
-                "product": workflow_response.get("product", ""),
-                "product_context": workflow_response.get("product_context", ""),
-                "route": workflow_response.get("route", "rag_answer"),
-                "last_5_turns": workflow_response.get("last_5_turns", []),
-                "enriched_query": workflow_response.get("rewriten_question", ""),
-                "enrich_duration_ms": workflow_response.get("enrich_duration_ms", 0.0),
-                "rag_top_chunks": workflow_response.get("rag_top_chunks", []),
-                "rag_retrieve_duration_ms": workflow_response.get("rag_retrieve_duration_ms", 0.0),
-                "generation_duration_ms": workflow_response.get("generation_duration_ms", 0.0),
-                "workflow_duration_ms": (time.perf_counter() - started_at) * 1000,
-            },
+            metadata=metadata,
         ).model_dump()
     except Exception as exc:
         debug_log(
@@ -389,6 +465,8 @@ async def handle_manual_question(
     timestamp: Any = None,
     source: str = "agent_manual_question",
     metadata: dict[str, Any] | None = None,
+    doc_filter: str = "",
+    retrieval_mode: str = "",
 ) -> dict[str, Any]:
     clean_question = question.strip()
     if not clean_question:
@@ -439,6 +517,8 @@ async def handle_manual_question(
         manual_question=True,
         trace_id=trace_id,
         utterance_id=utterance_id,
+        doc_filter=doc_filter,
+        retrieval_mode=retrieval_mode,
     )
 
     return {

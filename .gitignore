@@ -12,7 +12,10 @@ __pycache__/
 
 backend/.venv/
 backend/data/
-backend/chroma_db/
+
+# Local RAG pipeline artifacts, databases, uploads, and logs
+runtime/
+backend/runtime/
 
 frontends/*/node_modules/
 frontends/*/dist/

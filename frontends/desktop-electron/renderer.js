@@ -65,7 +65,20 @@ const versionLabel = document.getElementById('version-label');
 const tabButtons = Array.from(document.querySelectorAll('.tab-button'));
 const assistPanel = document.getElementById('assist-panel');
 const transcriptPanel = document.getElementById('transcript-panel');
+const ragPanel = document.getElementById('rag-panel');
 let activeTab = 'assist';
+
+// RAG settings state
+const ragModeSelect = document.getElementById('rag-mode-select');
+const ragDocFilterSelect = document.getElementById('rag-doc-filter-select');
+const ragFilterBadge = document.getElementById('rag-filter-badge');
+const docList = document.getElementById('doc-list');
+const fileInput = document.getElementById('file-input');
+const uploadZone = document.getElementById('upload-zone');
+const uploadProgress = document.getElementById('upload-progress');
+const uploadProgressText = document.getElementById('upload-progress-text');
+const uploadProgressBar = document.getElementById('upload-progress-bar');
+const btnRefreshDocs = document.getElementById('btn-refresh-docs');
 
 // Source picker modal elements
 const modal          = document.getElementById('source-modal');
@@ -140,15 +153,20 @@ function hideError() {
 
 function setActiveTab(tabName) {
   activeTab = tabName;
-  const showAssist = tabName === 'assist';
-  assistPanel.hidden = !showAssist;
-  transcriptPanel.hidden = showAssist;
+  const showAssist     = tabName === 'assist';
+  const showTranscript = tabName === 'transcript';
+  const showRag        = tabName === 'rag';
+  assistPanel.hidden     = !showAssist;
+  transcriptPanel.hidden = !showTranscript;
+  ragPanel.hidden        = !showRag;
 
   tabButtons.forEach((button) => {
     const isActive = button.dataset.tab === tabName;
     button.classList.toggle('active', isActive);
     button.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
+
+  if (showRag) loadDocuments();
 }
 
 function speakerInfo(channel) {
@@ -593,16 +611,24 @@ async function sendManualAssistQuestion() {
     pending: true,
   });
 
+  // Read retrieval settings from RAG panel
+  const ragMode   = ragModeSelect   ? ragModeSelect.value   : '';
+  const docFilter = ragDocFilterSelect ? ragDocFilterSelect.value : '';
+
   try {
+    const body = {
+      call_id: currentCallId,
+      question,
+      source: 'agent_manual_question',
+      metadata: { ui_source: 'desktop_live_assist_tab' },
+    };
+    if (ragMode)   body.retrieval_mode = ragMode;
+    if (docFilter) body.doc_filter = docFilter;
+
     const response = await fetch(`${API_URL}/livefeedback/manual_question`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        call_id: currentCallId,
-        question,
-        source: 'agent_manual_question',
-        metadata: { ui_source: 'desktop_live_assist_tab' },
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -1171,5 +1197,174 @@ btnClear.addEventListener('click', () => {
     innerHTML: 'Transcript cleared.<br/><span style="font-size:12px;opacity:0.6">Listening continues…</span>'
   }));
 });
+
+// ── RAG Panel ──────────────────────────────────────────────────────────────
+
+let _docsCache = [];
+let _pollTimer = null;
+
+function _fmtDate(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function _statusClass(status) {
+  if (status === 'ready') return 'ready';
+  if (status === 'error') return 'error';
+  return 'ingesting';
+}
+
+function _rebuildDocFilterSelect(docs) {
+  if (!ragDocFilterSelect) return;
+  const prev = ragDocFilterSelect.value;
+  while (ragDocFilterSelect.options.length > 1) ragDocFilterSelect.remove(1);
+  docs.filter(d => d.status === 'ready').forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.document_id;
+    opt.textContent = d.filename;
+    ragDocFilterSelect.appendChild(opt);
+  });
+  if (prev) ragDocFilterSelect.value = prev;
+  _updateFilterBadge();
+}
+
+function _updateFilterBadge() {
+  if (!ragFilterBadge || !ragDocFilterSelect) return;
+  const val = ragDocFilterSelect.value;
+  if (!val) {
+    ragFilterBadge.textContent = 'All docs';
+    ragFilterBadge.className = 'rag-badge';
+  } else {
+    const opt = ragDocFilterSelect.querySelector(`option[value="${val}"]`);
+    const name = opt ? opt.textContent : val;
+    ragFilterBadge.textContent = name.length > 20 ? name.slice(0, 18) + '…' : name;
+    ragFilterBadge.className = 'rag-badge ok';
+  }
+}
+
+async function loadDocuments() {
+  if (!docList) return;
+  try {
+    const resp = await fetch(`${API_URL}/rag/documents`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _docsCache = data.documents || [];
+    _renderDocList(_docsCache);
+    _rebuildDocFilterSelect(_docsCache);
+    const hasIngesting = _docsCache.some(d => d.status === 'ingesting');
+    if (hasIngesting && !_pollTimer) {
+      _pollTimer = setInterval(() => loadDocuments(), 3000);
+    } else if (!hasIngesting && _pollTimer) {
+      clearInterval(_pollTimer);
+      _pollTimer = null;
+    }
+  } catch (err) {
+    console.error('[RAG] loadDocuments failed:', err);
+    if (docList) {
+      docList.innerHTML = `<div class="empty-state" style="padding:20px 0; font-size:13px; color:#a44;">Could not load documents: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
+function _renderDocList(docs) {
+  if (!docList) return;
+  if (!docs.length) {
+    docList.innerHTML = `<div class="empty-state" style="padding:20px 0; font-size:13px; color:#445;">No documents indexed yet.</div>`;
+    return;
+  }
+  docList.innerHTML = '';
+  const currentFilter = ragDocFilterSelect ? ragDocFilterSelect.value : '';
+  docs.forEach(doc => {
+    const row = document.createElement('div');
+    row.className = 'doc-row';
+    const isSelected = currentFilter === doc.document_id;
+    row.innerHTML = `
+      <div class="doc-icon">📄</div>
+      <div class="doc-info">
+        <div class="doc-name" title="${escapeHtml(doc.filename)}">${escapeHtml(doc.filename)}</div>
+        <div class="doc-meta">${_fmtDate(doc.uploaded_at)} · ID: ${escapeHtml((doc.document_id || '').slice(0,8))}…</div>
+      </div>
+      <span class="doc-status-badge ${_statusClass(doc.status)}">${escapeHtml(doc.status)}</span>
+      ${doc.status === 'ready' ? `<button class="doc-select-btn${isSelected ? ' active' : ''}"
+        data-doc-id="${escapeHtml(doc.document_id)}"
+        data-doc-name="${escapeHtml(doc.filename)}">${isSelected ? 'Selected ✓' : 'Filter'}</button>` : ''}
+    `;
+    docList.appendChild(row);
+  });
+  docList.querySelectorAll('.doc-select-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.docId;
+      const isNowSelected = ragDocFilterSelect && ragDocFilterSelect.value === id;
+      if (ragDocFilterSelect) ragDocFilterSelect.value = isNowSelected ? '' : id;
+      _updateFilterBadge();
+      _renderDocList(_docsCache);
+    });
+  });
+}
+
+async function uploadDocument(file) {
+  if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
+    showError('Only PDF files are accepted.');
+    return;
+  }
+  if (uploadProgress) uploadProgress.style.display = 'block';
+  if (uploadProgressText) uploadProgressText.textContent = `Uploading ${file.name}…`;
+  if (uploadProgressBar) uploadProgressBar.style.width = '20%';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const resp = await fetch(`${API_URL}/rag/documents/upload`, { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Upload failed (${resp.status}): ${text}`);
+    }
+    const data = await resp.json();
+    if (uploadProgressText) uploadProgressText.textContent = `✓ Ingestion started for ${file.name} (job ${data.job_id})`;
+    if (uploadProgressBar) uploadProgressBar.style.width = '60%';
+    if (!_pollTimer) _pollTimer = setInterval(() => loadDocuments(), 3000);
+    await loadDocuments();
+    setTimeout(() => {
+      if (uploadProgress) uploadProgress.style.display = 'none';
+      if (uploadProgressBar) uploadProgressBar.style.width = '0%';
+    }, 5000);
+  } catch (err) {
+    console.error('[RAG] upload failed:', err);
+    showError(err.message || 'Upload failed.');
+    if (uploadProgress) uploadProgress.style.display = 'none';
+  }
+}
+
+if (fileInput) {
+  fileInput.addEventListener('change', async () => {
+    if (fileInput.files && fileInput.files[0]) {
+      await uploadDocument(fileInput.files[0]);
+      fileInput.value = '';
+    }
+  });
+}
+
+if (uploadZone) {
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const file = e.dataTransfer?.files?.[0];
+    if (file) await uploadDocument(file);
+  });
+}
+
+if (btnRefreshDocs) {
+  btnRefreshDocs.addEventListener('click', () => loadDocuments());
+}
+
+if (ragDocFilterSelect) {
+  ragDocFilterSelect.addEventListener('change', () => {
+    _updateFilterBadge();
+    _renderDocList(_docsCache);
+  });
+}
 
 loadRuntimeConfig();

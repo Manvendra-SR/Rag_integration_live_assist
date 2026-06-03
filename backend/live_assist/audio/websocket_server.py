@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+import os
+os.environ["TORCHDYNAMO_DISABLE"] = "1"
+os.environ["TORCH_COMPILE_DISABLE"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+from pathlib import Path
+from dotenv import load_dotenv
+
+_backend_dir = Path(__file__).resolve().parent.parent.parent
+_root_dir = _backend_dir.parent
+load_dotenv(_root_dir / ".env")
+load_dotenv(_backend_dir / ".env", override=True)
+
 import asyncio
 import json
 import re
@@ -1351,8 +1364,7 @@ async def handle_client(websocket) -> None:
 async def main_async() -> None:
     async with websockets.serve(handle_client, settings.stream_host, settings.stream_port):
         debug_message = f"Stream server running at ws://{settings.stream_host}:{settings.stream_port}"
-        if settings.diagnostics_enabled or settings.desktop_audio_capture_mode == "desktop_native_diagnostic":
-            print(debug_message, flush=True)
+        print(debug_message, flush=True)
         await asyncio.Future()
 
 

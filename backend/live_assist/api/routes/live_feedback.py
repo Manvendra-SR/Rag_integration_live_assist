@@ -78,6 +78,8 @@ async def manual_question(request: ManualQuestionRequest) -> dict:
         timestamp=request.timestamp,
         source=request.source,
         metadata=request.metadata,
+        doc_filter=request.doc_filter or "",
+        retrieval_mode=request.retrieval_mode or "",
     )
 
 
