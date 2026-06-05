@@ -196,6 +196,11 @@ class Settings(BaseSettings):
     rag_runtime_dir: str = "runtime"
     rag_chroma_collection: str = "LiveAssistAdvancedRAG"
 
+    # Semantic query cache
+    rag_cache_enabled: bool = True
+    rag_cache_similarity_threshold: float = 0.97
+    rag_cache_max_age_days: int = 7
+
     sarvam_api_key: str = Field(default="", alias="PYTHON_WS_SARVAM_API_KEY")
     sarvam_model: str = "saaras:v3"
     sarvam_mode: Literal["translate", "transcribe"] = "translate"

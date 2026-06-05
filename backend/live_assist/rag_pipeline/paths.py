@@ -17,9 +17,12 @@ BM25_DIR = RUNTIME_DIR / "bm25"
 CHROMA_DB_DIR = RUNTIME_DIR / "chroma_db"
 LOGS_INGESTION_DIR = RUNTIME_DIR / "logs" / "ingestion"
 LOGS_QUERY_DIR = RUNTIME_DIR / "logs" / "query"
+CACHE_DIR = RUNTIME_DIR / "cache"
+INDEX_VERSION_FILE = CACHE_DIR / ".index_version"
 
 def ensure_dirs() -> None:
-    for d in (UPLOAD_DIR, PARSED_DIR, CHUNKS_DIR, ENRICHED_DIR, BM25_DIR, CHROMA_DB_DIR, LOGS_INGESTION_DIR, LOGS_QUERY_DIR):
+    for d in (UPLOAD_DIR, PARSED_DIR, CHUNKS_DIR, ENRICHED_DIR, BM25_DIR, CHROMA_DB_DIR,
+              LOGS_INGESTION_DIR, LOGS_QUERY_DIR, CACHE_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
 ensure_dirs()

@@ -185,19 +185,89 @@ async def _run_live_assist_workflow(
             text=text,
             manual_question=manual_question,
         )
-        workflow_response = await asyncio.to_thread(
-            _invoke_turn_workflow,
-            session_id,
-            speaker,
-            text,
-            manual_question=manual_question,
-            trace_id=trace_id,
-            utterance_id=utterance_id,
-            chunk_id=chunk_id,
-            turn_id=turn_id,
-            doc_filter=doc_filter,
-            retrieval_mode=retrieval_mode,
-        )
+        # ── Semantic Cache Lookup (only when a specific doc_filter is set) ──────
+        cache_hit_result: dict | None = None
+        cache_lookup_ms: float = 0.0
+        cache_result_label: str = "SKIPPED"
+        cache_similarity: float | None = None
+        _cache_instance = None
+
+        if manual_question and doc_filter:
+            try:
+                from live_assist.rag_pipeline.paths import CACHE_DIR, INDEX_VERSION_FILE
+                from live_assist.rag_pipeline.semantic_cache import SemanticCache
+                _settings = get_settings()
+                if _settings.rag_cache_enabled:
+                    _cache_instance = SemanticCache(
+                        CACHE_DIR,
+                        INDEX_VERSION_FILE,
+                        similarity_threshold=_settings.rag_cache_similarity_threshold,
+                        max_age_days=_settings.rag_cache_max_age_days,
+                    )
+                    _t_cache = time.perf_counter()
+                    hit = _cache_instance.lookup(
+                        raw_query=text,
+                        doc_filter=doc_filter,
+                        retrieval_mode=retrieval_mode or _settings.rag_retrieval_mode,
+                    )
+                    cache_lookup_ms = (time.perf_counter() - _t_cache) * 1000
+                    cache_similarity = hit.get("similarity")
+                    if hit.get("result") == "HIT":
+                        cache_hit_result = hit["workflow_response"]
+                        cache_result_label = "HIT"
+                        sim_str = f"{cache_similarity:.4f}" if cache_similarity is not None else "N/A"
+                        debug_log(
+                            f"[SemanticCache] HIT | sim={sim_str} | "
+                            f"lookup_ms={cache_lookup_ms:.1f} | session={session_id}"
+                        )
+                    else:
+                        cache_result_label = "MISS"
+                        sim_str = f"{cache_similarity:.4f}" if cache_similarity is not None else "N/A"
+                        debug_log(
+                            f"[SemanticCache] MISS | best_sim={sim_str} | "
+                            f"lookup_ms={cache_lookup_ms:.1f} | session={session_id}"
+                        )
+            except Exception as _ce:
+                debug_log(f"[SemanticCache] lookup error (ignored): {_ce}")
+                cache_result_label = "ERROR"
+
+        if cache_hit_result is not None:
+            workflow_response = cache_hit_result
+            workflow_response["_cache_hit"] = True
+            workflow_response["_cache_similarity"] = cache_similarity
+            workflow_response["_cache_lookup_ms"] = cache_lookup_ms
+            workflow_response["_cache_result"] = cache_result_label
+        else:
+            workflow_response = await asyncio.to_thread(
+                _invoke_turn_workflow,
+                session_id,
+                speaker,
+                text,
+                manual_question=manual_question,
+                trace_id=trace_id,
+                utterance_id=utterance_id,
+                chunk_id=chunk_id,
+                turn_id=turn_id,
+                doc_filter=doc_filter,
+                retrieval_mode=retrieval_mode,
+            )
+            workflow_response["_cache_hit"] = False
+            workflow_response["_cache_lookup_ms"] = cache_lookup_ms
+            workflow_response["_cache_result"] = cache_result_label
+            workflow_response["_cache_similarity"] = cache_similarity  # may be None if no entries yet
+
+            # Write to cache on a successful miss (only for manual questions with doc_filter)
+            if manual_question and doc_filter and _cache_instance and workflow_response.get("answer"):
+                try:
+                    from live_assist.core.config import get_settings as _gs
+                    _cache_instance.write(
+                        raw_query=text,
+                        doc_filter=doc_filter,
+                        retrieval_mode=retrieval_mode or _gs().rag_retrieval_mode,
+                        workflow_response=workflow_response,
+                    )
+                except Exception as _cw:
+                    debug_log(f"[SemanticCache] write error (ignored): {_cw}")
         api_timing(
             session_id,
             "langgraph_to_thread_completed",
@@ -251,25 +321,69 @@ async def _run_live_assist_workflow(
                 f"Turn ID:      {turn_id}",
                 f"Timestamp:    {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
                 f"Total Time:   {metadata['workflow_duration_ms']:.1f}ms",
+                f"  (Stage sum covers enrichment + retrieval + generation.",
+                f"   Remainder is: graph overhead, context ingestion, DB persist, log_event calls.)",
                 "=" * 50,
                 "",
+                "[CACHE]",
+                f"  Eligible:    {'Yes' if doc_filter else 'No (All Documents)'}",
+                f"  Result:      {workflow_response.get('_cache_result', 'SKIPPED')}",
+                f"  Lookup Time: {workflow_response.get('_cache_lookup_ms', 0.0):.1f}ms",
+            ]
+
+            _cache_sim = workflow_response.get("_cache_similarity")
+            _cache_result = workflow_response.get("_cache_result", "SKIPPED")
+            if _cache_sim is not None:
+                from live_assist.core.config import get_settings as _gs2
+                _thresh = _gs2().rag_cache_similarity_threshold
+                lines.append(
+                    f"  Similarity:  {_cache_sim:.4f}  (threshold: {_thresh})"
+                )
+            elif _cache_result == "SKIPPED":
+                lines.append("  Similarity:  N/A  (cache not evaluated)")
+
+            _is_hit = workflow_response.get("_cache_hit", False)
+            lines += [
+                "",
                 "[QUERY PREPROCESSING (ENRICHMENT)]",
-                f"  Raw Query:        {workflow_response.get('question', '')}",
-                f"  Enriched Query:   {metadata['enriched_query']}",
-                f"  Duration:         {metadata['enrich_duration_ms']:.1f}ms",
-                "",
-                "[RETRIEVAL]",
-                f"  Route:            {metadata['route']}",
-                f"  Retrieval Mode:   {workflow_response.get('retrieval_mode', 'default')}",
-                f"  Doc Filter:       {workflow_response.get('doc_filter', 'None')}",
-                f"  Product Filter:   {metadata['product']}",
-                f"  Chunks Found:     {len(metadata['rag_top_chunks'])}",
-                f"  Duration:         {metadata['rag_retrieve_duration_ms']:.1f}ms",
-                "",
-                "[GENERATION]",
-                f"  Answer Generated: {'Yes' if answer else 'No'}",
-                f"  Duration:         {metadata['generation_duration_ms']:.1f}ms",
-                "",
+                f"  Raw Query:        {workflow_response.get('question', text)}",
+            ]
+            if _is_hit:
+                lines.append("  Enriched Query:   (served from cache — enrichment skipped)")
+                lines.append(f"  Duration:         0.0ms")
+            else:
+                lines += [
+                    f"  Enriched Query:   {metadata['enriched_query']}",
+                    f"  Duration:         {metadata['enrich_duration_ms']:.1f}ms",
+                ]
+
+            lines.append("")
+            if _is_hit:
+                lines += [
+                    "[RETRIEVAL]",
+                    "  Served from cache — retrieval skipped",
+                    "",
+                    "[GENERATION]",
+                    "  Served from cache — generation skipped",
+                    "",
+                ]
+            else:
+                lines += [
+                    "[RETRIEVAL]",
+                    f"  Route:            {metadata['route']}",
+                    f"  Retrieval Mode:   {workflow_response.get('retrieval_mode', 'default')}",
+                    f"  Doc Filter:       {doc_filter or 'None'}",
+                    f"  Product Filter:   {metadata['product']}",
+                    f"  Chunks Found:     {len(metadata['rag_top_chunks'])}",
+                    f"  Duration:         {metadata['rag_retrieve_duration_ms']:.1f}ms",
+                    "",
+                    "[GENERATION]",
+                    f"  Answer Generated: {'Yes' if answer else 'No'}",
+                    f"  Duration:         {metadata['generation_duration_ms']:.1f}ms",
+                    "",
+                ]
+
+            lines += [
                 "=" * 50,
                 "RETRIEVED CHUNKS",
                 "=" * 50,

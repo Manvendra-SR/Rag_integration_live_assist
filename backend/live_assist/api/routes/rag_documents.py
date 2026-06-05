@@ -68,6 +68,15 @@ def _run_ingest(
         )
     documents.save_document_info(doc_info)
 
+    # Bump cache index version so stale cached answers are invalidated
+    if status == "ok":
+        try:
+            from live_assist.rag_pipeline.paths import CACHE_DIR, INDEX_VERSION_FILE
+            from live_assist.rag_pipeline.semantic_cache import SemanticCache
+            SemanticCache(CACHE_DIR, INDEX_VERSION_FILE).bump_index_version()
+        except Exception as e:
+            print(f"Failed to bump cache index version: {e}")
+
     # ── Write Ingestion Log ───────────────────────────────────────────────────
     try:
         from live_assist.rag_pipeline.paths import LOGS_INGESTION_DIR
