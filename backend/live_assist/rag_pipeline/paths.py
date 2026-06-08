@@ -18,7 +18,20 @@ CHROMA_DB_DIR = RUNTIME_DIR / "chroma_db"
 LOGS_INGESTION_DIR = RUNTIME_DIR / "logs" / "ingestion"
 LOGS_QUERY_DIR = RUNTIME_DIR / "logs" / "query"
 CACHE_DIR = RUNTIME_DIR / "cache"
+# INDEX_VERSION_FILE kept for backward compat — no longer used by SemanticCache
 INDEX_VERSION_FILE = CACHE_DIR / ".index_version"
+
+
+def conversation_cache_dir(conversation_id: str) -> Path:
+    """Return (and create) the per-conversation cache subdirectory.
+
+    Structure: runtime/cache/<conversation_id>/
+    All entries are purged when the conversation ends via call_end.
+    """
+    d = CACHE_DIR / conversation_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
 
 def ensure_dirs() -> None:
     for d in (UPLOAD_DIR, PARSED_DIR, CHUNKS_DIR, ENRICHED_DIR, BM25_DIR, CHROMA_DB_DIR,

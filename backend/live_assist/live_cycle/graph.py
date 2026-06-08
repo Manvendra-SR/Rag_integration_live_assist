@@ -324,6 +324,33 @@ def context_only(state: LiveAssistState) -> dict[str, Any]:
 def enrich_query(state: LiveAssistState) -> dict[str, Any]:
     started_at = time.perf_counter()
     api_timing(state.session_id, "enrichment_started", chunk_id=state.chunk_id, turn_id=state.turn_id)
+
+    # ── Option B: Skip LLM if query was pre-enriched by the cache flow ─────────
+    if state.rewriten_question:
+        enrich_duration_ms = (time.perf_counter() - started_at) * 1000
+        api_timing(
+            state.session_id,
+            "enrichment_skipped_pre_enriched",
+            chunk_id=state.chunk_id,
+            turn_id=state.turn_id,
+            duration_ms=f"{enrich_duration_ms:.1f}",
+            query=log_text(state.rewriten_question),
+        )
+        debug_log(
+            f"[Enrichment] pre-enriched query used — skipping LLM | "
+            f"query={log_text(state.rewriten_question)}"
+        )
+        # Still resolve the product from existing context
+        selected_product = _normalize_rag_product(state.product or "") or (
+            state.product_context.split(",")[0].strip() if state.product_context else ""
+        )
+        return {
+            "rewriten_question": state.rewriten_question,
+            "enrich_duration_ms": 0.0,
+            "product": selected_product or state.product,
+        }
+
+    # ── Standard enrichment via LLM ─────────────────────────────────────────────
     user_prompt = f"""
     ## User Question
     {state.question}
@@ -389,6 +416,7 @@ def enrich_query(state: LiveAssistState) -> dict[str, Any]:
         "product_context": product_context,
         "enrich_duration_ms": enrich_duration_ms,
     }
+
 
 
 def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:

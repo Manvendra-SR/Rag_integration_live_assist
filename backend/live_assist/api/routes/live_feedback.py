@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 
 from fastapi import APIRouter
@@ -13,6 +14,7 @@ from live_assist.storage.transcript_store import session_store
 
 router = APIRouter(prefix="/livefeedback", tags=["LiveFeedback"])
 settings = get_settings()
+log = logging.getLogger(__name__)
 _active_webhook_requests = 0
 _active_webhook_lock = asyncio.Lock()
 
@@ -71,6 +73,11 @@ async def live_feedback_webhook(request: LiveFeedbackRequest) -> dict:
 
 @router.post("/manual_question")
 async def manual_question(request: ManualQuestionRequest) -> dict:
+    """Handle a manual question typed by the agent.
+
+    Note: doc_filter and retrieval_mode are no longer accepted from the UI.
+    Retrieval behaviour is controlled exclusively by server-side configuration.
+    """
     session_id = request.call_id or settings.live_feedback_session_id
     return await handle_manual_question(
         session_id=session_id,
@@ -78,12 +85,15 @@ async def manual_question(request: ManualQuestionRequest) -> dict:
         timestamp=request.timestamp,
         source=request.source,
         metadata=request.metadata,
-        doc_filter=request.doc_filter or "",
-        retrieval_mode=request.retrieval_mode or "",
     )
 
 
 @router.post("/call_end")
 async def call_end(call_id: str) -> dict[str, str]:
+    """End a conversation: clear in-memory session state.
+
+    Note: cache files are NOT purged here — they persist in runtime/cache/<call_id>/
+    and can be manually cleared or purged on a future schedule.
+    """
     session_store.clear_all(call_id)
     return {"status": "completed", "call_id": call_id}

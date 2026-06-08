@@ -58,8 +58,7 @@ class ManualQuestionRequest(BaseModel):
     timestamp: Optional[Union[int, float, str]] = None
     source: str = "agent_manual_question"
     metadata: dict[str, Any] = Field(default_factory=dict)
-    doc_filter: Optional[str] = None          # document_id to restrict retrieval
-    retrieval_mode: Optional[str] = None       # semantic | bm25 | hybrid | reranked
+    # doc_filter and retrieval_mode removed — now server-controlled via config
 
 
 class TranscriptTurn(BaseModel):

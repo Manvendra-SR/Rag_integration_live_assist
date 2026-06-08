@@ -348,32 +348,6 @@
     <div class="panel-label">RAG Settings &amp; Documents</div>
     <div class="rag-panel-body">
 
-      <!-- Retrieval Settings -->
-      <div>
-        <div class="rag-section-title">Retrieval Settings</div>
-        <div class="rag-field-row" style="margin-bottom:12px;">
-          <span class="rag-label">Retrieval Mode</span>
-          <select id="rag-mode-select" class="rag-select">
-            <option value="">Default (from server)</option>
-            <option value="semantic">Semantic — vector search only</option>
-            <option value="bm25">BM25 — keyword search only</option>
-            <option value="hybrid">Hybrid — semantic + BM25 fused</option>
-            <option value="reranked">Reranked — hybrid + cross-encoder</option>
-          </select>
-        </div>
-        <div class="rag-field-row">
-          <span class="rag-label">Doc Filter</span>
-          <select id="rag-doc-filter-select" class="rag-select">
-            <option value="">All Documents</option>
-          </select>
-          <span id="rag-filter-badge" class="rag-badge">All docs</span>
-        </div>
-        <div style="margin-top:10px; font-size:11px; color:#446; line-height:1.7;">
-          ℹ Retrieval Mode and Doc Filter apply to manual questions typed below. Live transcript
-          answers always use the server's default settings.
-        </div>
-      </div>
-
       <!-- Document Upload -->
       <div>
         <div class="rag-section-title">Upload Document</div>

@@ -69,9 +69,6 @@ const ragPanel = document.getElementById('rag-panel');
 let activeTab = 'assist';
 
 // RAG settings state
-const ragModeSelect = document.getElementById('rag-mode-select');
-const ragDocFilterSelect = document.getElementById('rag-doc-filter-select');
-const ragFilterBadge = document.getElementById('rag-filter-badge');
 const docList = document.getElementById('doc-list');
 const fileInput = document.getElementById('file-input');
 const uploadZone = document.getElementById('upload-zone');
@@ -611,10 +608,6 @@ async function sendManualAssistQuestion() {
     pending: true,
   });
 
-  // Read retrieval settings from RAG panel
-  const ragMode   = ragModeSelect   ? ragModeSelect.value   : '';
-  const docFilter = ragDocFilterSelect ? ragDocFilterSelect.value : '';
-
   try {
     const body = {
       call_id: currentCallId,
@@ -622,8 +615,6 @@ async function sendManualAssistQuestion() {
       source: 'agent_manual_question',
       metadata: { ui_source: 'desktop_live_assist_tab' },
     };
-    if (ragMode)   body.retrieval_mode = ragMode;
-    if (docFilter) body.doc_filter = docFilter;
 
     const response = await fetch(`${API_URL}/livefeedback/manual_question`, {
       method: 'POST',
@@ -1216,34 +1207,6 @@ function _statusClass(status) {
   return 'ingesting';
 }
 
-function _rebuildDocFilterSelect(docs) {
-  if (!ragDocFilterSelect) return;
-  const prev = ragDocFilterSelect.value;
-  while (ragDocFilterSelect.options.length > 1) ragDocFilterSelect.remove(1);
-  docs.filter(d => d.status === 'ready').forEach(d => {
-    const opt = document.createElement('option');
-    opt.value = d.document_id;
-    opt.textContent = d.filename;
-    ragDocFilterSelect.appendChild(opt);
-  });
-  if (prev) ragDocFilterSelect.value = prev;
-  _updateFilterBadge();
-}
-
-function _updateFilterBadge() {
-  if (!ragFilterBadge || !ragDocFilterSelect) return;
-  const val = ragDocFilterSelect.value;
-  if (!val) {
-    ragFilterBadge.textContent = 'All docs';
-    ragFilterBadge.className = 'rag-badge';
-  } else {
-    const opt = ragDocFilterSelect.querySelector(`option[value="${val}"]`);
-    const name = opt ? opt.textContent : val;
-    ragFilterBadge.textContent = name.length > 20 ? name.slice(0, 18) + '…' : name;
-    ragFilterBadge.className = 'rag-badge ok';
-  }
-}
-
 async function loadDocuments() {
   if (!docList) return;
   try {
@@ -1252,7 +1215,6 @@ async function loadDocuments() {
     const data = await resp.json();
     _docsCache = data.documents || [];
     _renderDocList(_docsCache);
-    _rebuildDocFilterSelect(_docsCache);
     const hasIngesting = _docsCache.some(d => d.status === 'ingesting');
     if (hasIngesting && !_pollTimer) {
       _pollTimer = setInterval(() => loadDocuments(), 3000);
@@ -1275,11 +1237,9 @@ function _renderDocList(docs) {
     return;
   }
   docList.innerHTML = '';
-  const currentFilter = ragDocFilterSelect ? ragDocFilterSelect.value : '';
   docs.forEach(doc => {
     const row = document.createElement('div');
     row.className = 'doc-row';
-    const isSelected = currentFilter === doc.document_id;
     row.innerHTML = `
       <div class="doc-icon">📄</div>
       <div class="doc-info">
@@ -1287,20 +1247,8 @@ function _renderDocList(docs) {
         <div class="doc-meta">${_fmtDate(doc.uploaded_at)} · ID: ${escapeHtml((doc.document_id || '').slice(0,8))}…</div>
       </div>
       <span class="doc-status-badge ${_statusClass(doc.status)}">${escapeHtml(doc.status)}</span>
-      ${doc.status === 'ready' ? `<button class="doc-select-btn${isSelected ? ' active' : ''}"
-        data-doc-id="${escapeHtml(doc.document_id)}"
-        data-doc-name="${escapeHtml(doc.filename)}">${isSelected ? 'Selected ✓' : 'Filter'}</button>` : ''}
     `;
     docList.appendChild(row);
-  });
-  docList.querySelectorAll('.doc-select-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.docId;
-      const isNowSelected = ragDocFilterSelect && ragDocFilterSelect.value === id;
-      if (ragDocFilterSelect) ragDocFilterSelect.value = isNowSelected ? '' : id;
-      _updateFilterBadge();
-      _renderDocList(_docsCache);
-    });
   });
 }
 
@@ -1358,13 +1306,6 @@ if (uploadZone) {
 
 if (btnRefreshDocs) {
   btnRefreshDocs.addEventListener('click', () => loadDocuments());
-}
-
-if (ragDocFilterSelect) {
-  ragDocFilterSelect.addEventListener('change', () => {
-    _updateFilterBadge();
-    _renderDocList(_docsCache);
-  });
 }
 
 loadRuntimeConfig();
