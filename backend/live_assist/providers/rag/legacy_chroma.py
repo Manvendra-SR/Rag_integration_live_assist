@@ -6,13 +6,15 @@ from typing import Any
 import chromadb
 from langchain_core.documents import Document
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
 
 
 class ChromaDBRetriever:
     def __init__(self, config: dict[str, Any]):
         self.config = config
-        self.embedding_model = SentenceTransformer(config["EMBEDDING_MODEL"])
+        # Route through the central embedding factory so EMBEDDING_PROVIDER /
+        # EMBEDDING_BASE_URL / EMBEDDING_API_KEY are respected here too.
+        from live_assist.clients import get_embedder as _get_embedder
+        self._embedder = _get_embedder()
         self.client = chromadb.PersistentClient(
             path=config["CHROMA_DB_PERSISTENT_DIRECTORY"],
         )
@@ -21,7 +23,7 @@ class ChromaDBRetriever:
         )
 
     def get_embedding(self, text: str) -> list[float]:
-        return self.embedding_model.encode(text).tolist()
+        return self._embedder.embed_one(text)
 
     def clean_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
         cleaned = {}

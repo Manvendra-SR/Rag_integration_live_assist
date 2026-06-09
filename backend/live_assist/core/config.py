@@ -67,12 +67,31 @@ CONFIG_KEY_ALIASES = {
     "LIVE_FEEDBACK_RECENT_TURNS": "live_feedback_recent_turns",
     "GROQ_API_KEY": "groq_api_key",
     "OPENAI_API_KEY": "openai_api_key",
+    "GEMINI_API_KEY": "gemini_api_key",
     "LLM_API_KEY": "llm_api_key",
     "LLM_BASE_URL": "llm_base_url",
     "LLM_STRUCTURED_OUTPUT_MODE": "llm_structured_output_mode",
     "HF_TOKEN": "hf_token",
     "LLM_MODEL": "llm_model",
     "TEMPERATURE": "temperature",
+    # ── Slot 1: Live LLM ──────────────────────────────────────────────────────
+    "LIVE_LLM_PROVIDER": "live_llm_provider",
+    "LIVE_LLM_MODEL": "live_llm_model",
+    "LIVE_LLM_BASE_URL": "live_llm_base_url",
+    "LIVE_LLM_API_KEY": "live_llm_api_key",
+    "LIVE_LLM_TEMPERATURE": "live_llm_temperature",
+    "LIVE_LLM_STRUCTURED_OUTPUT_MODE": "live_llm_structured_output_mode",
+    # ── Slot 2: Context LLM ───────────────────────────────────────────────────
+    "CONTEXT_LLM_PROVIDER": "context_llm_provider",
+    "CONTEXT_LLM_MODEL": "context_llm_model",
+    "CONTEXT_LLM_BASE_URL": "context_llm_base_url",
+    "CONTEXT_LLM_API_KEY": "context_llm_api_key",
+    # VLM sub-slot (existing namespace, add base_url/api_key)
+    "PARSER_VLM_BASE_URL": "parser_vlm_base_url",
+    "PARSER_VLM_API_KEY": "parser_vlm_api_key",
+    # ── Slot 3: Embeddings ────────────────────────────────────────────────────
+    "EMBEDDING_BASE_URL": "embedding_base_url",
+    "EMBEDDING_API_KEY": "embedding_api_key",
     "CHROMA_DB_COLLECTION_NAME": "chroma_db_collection_name",
     "EMBEDDING_MODEL": "embedding_model",
     "NUMBER_OF_CHUNKS_TO_RETRIVE": "number_of_chunks_to_retrieve",
@@ -302,12 +321,35 @@ class Settings(BaseSettings):
 
     groq_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_structured_output_mode: Literal["json_prompt", "native", "native_fallback"] = "json_prompt"
     hf_token: str = ""
     llm_model: str = "openai/gpt-oss-20b"
     temperature: float = 0
+
+    # ── Slot 1: Live LLM (query enrichment + answer generation) ───────────────
+    live_llm_provider: str = ""
+    live_llm_model: str = ""
+    live_llm_base_url: str = ""
+    live_llm_api_key: str = ""
+    live_llm_temperature: float = -1.0  # -1 means "use global temperature"
+    live_llm_structured_output_mode: str = ""
+
+    # ── Slot 2: Context LLM (ingestion contextual prefixes) ───────────────────
+    context_llm_provider: str = ""
+    context_llm_model: str = ""
+    context_llm_base_url: str = ""
+    context_llm_api_key: str = ""
+
+    # VLM sub-slot (figure/table description) — existing namespace extended
+    parser_vlm_base_url: str = ""
+    parser_vlm_api_key: str = ""
+
+    # ── Slot 3: Embeddings ────────────────────────────────────────────────────
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""
 
     chroma_db_collection_name: str = "finideas_collection"
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -360,11 +402,79 @@ class Settings(BaseSettings):
     )
     recent_n_messages_context: int = 5
 
+    # ── Resolver helpers: implement fallback chains for each slot ────────────
+
+    def resolve_live_llm_provider(self) -> str:
+        """Slot 1 provider: LIVE_LLM_PROVIDER → LLM_PROVIDER → 'groq'."""
+        return (self.live_llm_provider or self.llm_provider or "groq").lower()
+
+    def resolve_live_llm_model(self) -> str:
+        """Slot 1 model: LIVE_LLM_MODEL → LLM_MODEL."""
+        return self.live_llm_model or self.llm_model or ""
+
+    def resolve_live_llm_base_url(self) -> str:
+        """Slot 1 base URL: LIVE_LLM_BASE_URL → LLM_BASE_URL."""
+        return self.live_llm_base_url or self.llm_base_url or ""
+
+    def resolve_live_llm_api_key(self) -> str:
+        """Slot 1 API key with provider-aware fallback."""
+        if self.live_llm_api_key:
+            return self.live_llm_api_key
+        provider = self.resolve_live_llm_provider()
+        if provider == "groq":
+            return self.groq_api_key
+        if provider == "openai":
+            return self.openai_api_key or self.llm_api_key
+        if provider == "gemini":
+            return self.gemini_api_key
+        return self.llm_api_key  # openai_compatible / other
+
+    def resolve_live_llm_temperature(self) -> float:
+        """Slot 1 temperature: LIVE_LLM_TEMPERATURE → TEMPERATURE."""
+        if self.live_llm_temperature >= 0:
+            return self.live_llm_temperature
+        return self.temperature
+
+    def resolve_live_llm_structured_output_mode(self) -> str:
+        """Slot 1 structured output mode: LIVE_LLM_STRUCTURED_OUTPUT_MODE → LLM_STRUCTURED_OUTPUT_MODE."""
+        return self.live_llm_structured_output_mode or self.llm_structured_output_mode or "json_prompt"
+
+    def resolve_context_llm_provider(self) -> str:
+        """Slot 2 provider: CONTEXT_LLM_PROVIDER → GENERATION_PROVIDER (backend/.env) → LLM_PROVIDER → 'groq'."""
+        import os
+        generation = os.environ.get("GENERATION_PROVIDER", "")
+        return (self.context_llm_provider or generation or self.llm_provider or "groq").lower()
+
+    def resolve_context_llm_model(self) -> str:
+        """Slot 2 model: CONTEXT_LLM_MODEL → GENERATION_MODEL → LLM_MODEL."""
+        import os
+        generation = os.environ.get("GENERATION_MODEL", "")
+        return self.context_llm_model or generation or self.llm_model or ""
+
+    def resolve_context_llm_base_url(self) -> str:
+        """Slot 2 base URL: CONTEXT_LLM_BASE_URL → LLM_BASE_URL."""
+        return self.context_llm_base_url or self.llm_base_url or ""
+
+    def resolve_context_llm_api_key(self) -> str:
+        """Slot 2 API key with provider-aware fallback."""
+        if self.context_llm_api_key:
+            return self.context_llm_api_key
+        provider = self.resolve_context_llm_provider()
+        if provider == "groq":
+            return self.groq_api_key
+        if provider == "openai":
+            return self.openai_api_key or self.llm_api_key
+        if provider == "gemini":
+            return self.gemini_api_key
+        return self.llm_api_key  # openai_compatible / ollama / other
+
     def workflow_config(self) -> dict:
         return {
+            # Legacy keys — kept for backward compat
             "LLM_PROVIDER": self.llm_provider,
             "GROQ_API_KEY": self.groq_api_key,
             "OPENAI_API_KEY": self.openai_api_key,
+            "GEMINI_API_KEY": self.gemini_api_key,
             "LLM_API_KEY": self.llm_api_key,
             "LLM_BASE_URL": self.llm_base_url,
             "LLM_STRUCTURED_OUTPUT_MODE": self.llm_structured_output_mode,
@@ -382,6 +492,13 @@ class Settings(BaseSettings):
             "FINAL_RESPONSE_USER_PROMPT": self.final_response_user_prompt,
             "SUMMARIZATION_PROMPT": self.summarization_prompt,
             "RECENT_N_MESSAGES_CONTEXT": self.recent_n_messages_context,
+            # ── Slot 1: Live LLM (resolved) ───────────────────────────────────
+            "LIVE_LLM_PROVIDER": self.resolve_live_llm_provider(),
+            "LIVE_LLM_MODEL": self.resolve_live_llm_model(),
+            "LIVE_LLM_BASE_URL": self.resolve_live_llm_base_url(),
+            "LIVE_LLM_API_KEY": self.resolve_live_llm_api_key(),
+            "LIVE_LLM_TEMPERATURE": self.resolve_live_llm_temperature(),
+            "LIVE_LLM_STRUCTURED_OUTPUT_MODE": self.resolve_live_llm_structured_output_mode(),
         }
 
 

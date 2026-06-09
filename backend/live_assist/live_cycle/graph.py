@@ -12,12 +12,12 @@ from live_assist.core.diagnostics import log_event
 from live_assist.core.models import ProductType, QueryResponse, RewriteQuestion, Speaker
 from live_assist.core.terminal_log import api_timing, compact_text, debug_log
 from live_assist.live_cycle.state import LiveAssistState
-from live_assist.providers.llm.groq import GroqLLM
+from live_assist.providers.llm.llm_provider import LiveCycleLLM
 from live_assist.storage.context_store import context_store
 
 settings = get_settings()
 config = settings.workflow_config()
-llm = GroqLLM(config)
+llm = LiveCycleLLM(config)
 RAG_INDEXED_PRODUCTS = {
     ProductType.ILTS.value,
     ProductType.FGF.value,

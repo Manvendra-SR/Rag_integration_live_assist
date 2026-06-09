@@ -27,17 +27,21 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-# Provider selection: "ollama" (default, local) | "groq" | "gemini"
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").lower()
+# Provider selection: "ollama" (default, local) | "groq" | "openai_compatible" | "gemini"
+# New code: set CONTEXT_LLM_PROVIDER / CONTEXT_LLM_MODEL / CONTEXT_LLM_BASE_URL / CONTEXT_LLM_API_KEY
+# Legacy code: GENERATION_PROVIDER / GROQ_API_KEY / GROQ_MODEL / GROQ_BASE_URL still work via factory fallback
+LLM_PROVIDER = os.environ.get("CONTEXT_LLM_PROVIDER") or os.environ.get("GENERATION_PROVIDER") or os.environ.get("LLM_PROVIDER", "ollama")
+LLM_PROVIDER = LLM_PROVIDER.lower()
 
-# Local Ollama
+# Local Ollama (fallback when no cloud provider is configured)
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/chat")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
-# Cloud Groq (OpenAI-compatible)
+# Legacy Groq constants — still read here so generate_prefix_groq() works as a
+# fallback if the factory is unavailable. New code should use CONTEXT_LLM_* vars.
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_BASE_URL = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_BASE_URL = os.environ.get("CONTEXT_LLM_BASE_URL") or os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_MODEL = os.environ.get("CONTEXT_LLM_MODEL") or os.environ.get("GENERATION_MODEL") or os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_RPM = int(os.environ.get("GROQ_RPM", "28"))  # 28 < 30 free tier cap, with safety margin
 
 MAX_PREFIX_TOKENS = 200  # raised from 120 → room for multi-topic coverage
@@ -281,12 +285,9 @@ def enrich_chunks(chunks: list[dict[str, Any]],
         section_key = sp[0] if sp else "__root__"
         section_text = section_lookup.get(section_key, c["text"])
         try:
-            if provider == "groq":
-                prefix = generate_prefix_groq(c["text"], section_text, model=model)
-            else:
-                with httpx.Client(timeout=HTTP_TIMEOUT) as cli:
-                    prefix = generate_prefix_ollama(c["text"], section_text,
-                                                    model=model, client=cli)
+            # Always use the factory path — it reads CONTEXT_LLM_PROVIDER and all
+            # slot vars with automatic fallback to GENERATION_PROVIDER / Ollama.
+            prefix = generate_prefix(c["text"], section_text)
         except Exception as exc:
             log.warning(f"chunk {idx} prefix failed ({exc}); falling back to template")
             sp_str = " > ".join(c.get("section_path") or [])

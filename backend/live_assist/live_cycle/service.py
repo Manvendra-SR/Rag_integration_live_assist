@@ -28,8 +28,10 @@ def log_text(value: str, limit: int = 300) -> str:
 def get_workflow_app():
     global _workflow_app
     if _workflow_app is None:
+        from live_assist.core.observability import log_provider_config
         from live_assist.live_cycle.graph import create_workflow
 
+        log_provider_config()
         _workflow_app = create_workflow()
     return _workflow_app
 

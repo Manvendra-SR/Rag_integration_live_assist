@@ -112,7 +112,7 @@ class EmbedClient:
 # the dispatcher layer catches and falls back.
 # ===========================================================================
 
-# ---------- VLM ----------
+# ────────── VLM builders ─────────────────────────────────────────────────────────────
 def _make_ollama_vlm(model: str) -> VLMClient:
     import ollama
     host = os.environ.get("PARSER_OLLAMA_API_URL", "http://127.0.0.1:11434/api/chat")
@@ -202,7 +202,35 @@ def _make_openai_vlm(model: str, api_key: str) -> VLMClient:
     return VLMClient(f"openai:{model}", "openai", model, False, _call)
 
 
-# ---------- LLM (text) ----------
+def _make_openai_compatible_vlm(model: str, api_key: str, base_url: str) -> VLMClient:
+    """VLM via any OpenAI-compatible multimodal endpoint (vLLM / RunPod / etc.)."""
+    import base64 as _b64
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key or "dummy", base_url=base_url)
+
+    def _call(image_path: str, prompt: str, options: dict) -> str | None:
+        with open(image_path, "rb") as fh:
+            img_b64 = _b64.b64encode(fh.read()).decode("ascii")
+        media = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=int(options.get("num_predict", 1024)),
+            temperature=float(options.get("temperature", 0.1)),
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:{media};base64,{img_b64}"}},
+                ],
+            }],
+        )
+        return (resp.choices[0].message.content or "").strip() or None
+
+    return VLMClient(f"openai_compatible:{model}", "openai_compatible", model, False, _call)
+
+
+# ────────── LLM (text) builders ───────────────────────────────────────────────────────────
 def _make_ollama_llm(model: str) -> LLMClient:
     import ollama
     host = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/chat").split("/api/")[0]
@@ -282,7 +310,24 @@ def _make_anthropic_llm(model: str, api_key: str) -> LLMClient:
     return LLMClient(f"anthropic:{model}", "anthropic", model, False, _call)
 
 
-# ---------- Embeddings ----------
+def _make_openai_compatible_llm(model: str, api_key: str, base_url: str) -> LLMClient:
+    """Text LLM via any OpenAI-compatible endpoint (vLLM / RunPod / local vLLM / etc.)."""
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key or "dummy", base_url=base_url)
+
+    def _call(prompt: str, options: dict) -> str | None:
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=int(options.get("max_tokens", options.get("num_predict", 1024))),
+            temperature=float(options.get("temperature", 0.0)),
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return (resp.choices[0].message.content or "").strip() or None
+
+    return LLMClient(f"openai_compatible:{model}", "openai_compatible", model, False, _call)
+
+
+# ────────── Embedding builders ───────────────────────────────────────────────────────────
 def _make_local_embedder(model: str) -> EmbedClient:
     from sentence_transformers import SentenceTransformer
     m = SentenceTransformer(model)
@@ -342,9 +387,19 @@ def _make_gemini_embedder(model: str, api_key: str) -> EmbedClient:
     return EmbedClient(f"gemini:{model}", "gemini", model, False, dim, _embed)
 
 
-# ===========================================================================
-# Provider dispatch tables
-# ===========================================================================
+def _make_openai_compatible_embedder(model: str, api_key: str, base_url: str) -> EmbedClient:
+    """Embeddings via any OpenAI-compatible endpoint (local vLLM / RunPod / etc.)."""
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key or "dummy", base_url=base_url)
+    # Dimension is unknown until we make a call; default 1024 covers most open models
+    dim = 1024
+
+    def _embed(texts: list[str]) -> list[list[float]]:
+        resp = client.embeddings.create(model=model, input=list(texts))
+        return [d.embedding for d in resp.data]
+
+    return EmbedClient(f"openai_compatible:{model}", "openai_compatible", model, False, dim, _embed)
+
 _VLM_BUILDERS = {
     "gemini":    (_make_gemini_vlm,    "GEMINI_API_KEY"),
     "anthropic": (_make_anthropic_vlm, "ANTHROPIC_API_KEY"),
@@ -395,7 +450,12 @@ def _try_cloud(kind: str, builder, model: str, key_env: str,
 
 
 def get_vlm() -> VLMClient:
-    """Return the configured VLM client. Cloud first if key valid, else local Ollama."""
+    """Return the configured VLM client (Slot 2b: PARSER_VLM_*).
+
+    Provider priority:
+        PARSER_VLM_PROVIDER → cloud if key present → local Ollama fallback
+    Adds openai_compatible support via PARSER_VLM_BASE_URL + PARSER_VLM_API_KEY.
+    """
     with _LOCK:
         if "vlm" in _CACHE:
             return _CACHE["vlm"]
@@ -408,13 +468,33 @@ def get_vlm() -> VLMClient:
         local_model = _env("PARSER_OLLAMA_VISION_MODEL", "llama3.2-vision:11b")
 
         client: VLMClient | None = None
-        if provider in _VLM_BUILDERS:
+
+        # ── openai_compatible: requires PARSER_VLM_BASE_URL ───────────────────────
+        if provider == "openai_compatible":
+            base_url = _env("PARSER_VLM_BASE_URL")
+            api_key = _env("PARSER_VLM_API_KEY") or "dummy"
+            model = cloud_model or _env("PARSER_VLM_MODEL", "")
+            if base_url and model:
+                try:
+                    client = _make_openai_compatible_vlm(model, api_key, base_url)
+                    log.info(f"[model_factory] VLM → openai_compatible:{model} @ {base_url}")
+                except Exception as e:
+                    log.warning(f"[model_factory] VLM openai_compatible failed ({e}); "
+                                f"falling back to local Ollama")
+            else:
+                log.warning("[model_factory] VLM openai_compatible requires "
+                            "PARSER_VLM_BASE_URL and PARSER_VLM_MODEL; "
+                            "falling back to local Ollama")
+
+        # ── Cloud providers via dispatch table ────────────────────────────────
+        elif provider in _VLM_BUILDERS:
             builder, key_env = _VLM_BUILDERS[provider]
             client = _try_cloud("VLM", builder, cloud_model, key_env, provider)
         elif provider not in ("ollama", "local"):
             log.warning(f"[model_factory] unknown VLM provider '{provider}', "
                         f"using local Ollama")
 
+        # ── Local Ollama fallback ───────────────────────────────────────────
         if client is None:
             try:
                 client = _make_ollama_vlm(local_model)
@@ -429,27 +509,62 @@ def get_vlm() -> VLMClient:
 
 
 def get_llm() -> LLMClient:
-    """Return the configured text-generation LLM. Cloud first if key valid, else local Ollama."""
+    """Return the configured text-generation LLM (Slot 2: CONTEXT_LLM_*).
+
+    Provider priority:
+        CONTEXT_LLM_PROVIDER → GENERATION_PROVIDER → cloud if key present → local Ollama
+    Adds openai_compatible support via CONTEXT_LLM_BASE_URL + CONTEXT_LLM_API_KEY.
+    """
     with _LOCK:
         if "llm" in _CACHE:
             return _CACHE["llm"]
-        provider = (_env("GENERATION_PROVIDER", "ollama") or "ollama").lower()
-        cloud_model = _env("GENERATION_MODEL") or {
-            "groq": "llama-3.3-70b-versatile",
-            "gemini": "gemini-2.0-flash",
-            "openai": "gpt-4o-mini",
-            "anthropic": "claude-haiku-4-5",
-        }.get(provider, "")
+
+        # Slot 2: CONTEXT_LLM_PROVIDER → GENERATION_PROVIDER → fallback
+        provider = (
+            _env("CONTEXT_LLM_PROVIDER")
+            or _env("GENERATION_PROVIDER", "ollama")
+            or "ollama"
+        ).lower()
+        cloud_model = (
+            _env("CONTEXT_LLM_MODEL")
+            or _env("GENERATION_MODEL")
+            or {
+                "groq": "llama-3.3-70b-versatile",
+                "gemini": "gemini-2.0-flash",
+                "openai": "gpt-4o-mini",
+                "anthropic": "claude-haiku-4-5",
+            }.get(provider, "")
+        )
         local_model = _env("LLM_LOCAL_MODEL", "llama3.1")
 
         client: LLMClient | None = None
-        if provider in _LLM_BUILDERS:
+
+        # ── openai_compatible: requires CONTEXT_LLM_BASE_URL ─────────────────────
+        if provider == "openai_compatible":
+            base_url = _env("CONTEXT_LLM_BASE_URL") or _env("LLM_BASE_URL")
+            api_key = _env("CONTEXT_LLM_API_KEY") or _env("LLM_API_KEY") or "dummy"
+            model = cloud_model or ""
+            if base_url and model:
+                try:
+                    client = _make_openai_compatible_llm(model, api_key, base_url)
+                    log.info(f"[model_factory] LLM → openai_compatible:{model} @ {base_url}")
+                except Exception as e:
+                    log.warning(f"[model_factory] LLM openai_compatible failed ({e}); "
+                                f"falling back to local Ollama")
+            else:
+                log.warning("[model_factory] LLM openai_compatible requires "
+                            "CONTEXT_LLM_BASE_URL (or LLM_BASE_URL) and a model name; "
+                            "falling back to local Ollama")
+
+        # ── Cloud providers via dispatch table ────────────────────────────────
+        elif provider in _LLM_BUILDERS:
             builder, key_env = _LLM_BUILDERS[provider]
             client = _try_cloud("LLM", builder, cloud_model, key_env, provider)
         elif provider not in ("ollama", "local"):
             log.warning(f"[model_factory] unknown LLM provider '{provider}', "
                         f"using local Ollama")
 
+        # ── Local Ollama fallback ───────────────────────────────────────────
         if client is None:
             try:
                 client = _make_ollama_llm(local_model)
@@ -464,7 +579,12 @@ def get_llm() -> LLMClient:
 
 
 def get_embedder() -> EmbedClient:
-    """Return the configured embedding client. Cloud first if key valid, else local Sentence-Transformers."""
+    """Return the configured embedding client (Slot 3: EMBEDDING_*).
+
+    Provider priority:
+        EMBEDDING_PROVIDER → cloud if key/url present → local SentenceTransformers
+    Adds openai_compatible support via EMBEDDING_BASE_URL + EMBEDDING_API_KEY.
+    """
     with _LOCK:
         if "embedder" in _CACHE:
             return _CACHE["embedder"]
@@ -477,13 +597,33 @@ def get_embedder() -> EmbedClient:
         local_model = _env("EMBED_LOCAL_MODEL", "BAAI/bge-m3")
 
         client: EmbedClient | None = None
-        if provider in _EMBED_BUILDERS:
+
+        # ── openai_compatible: requires EMBEDDING_BASE_URL ───────────────────────
+        if provider == "openai_compatible":
+            base_url = _env("EMBEDDING_BASE_URL")
+            api_key = _env("EMBEDDING_API_KEY") or "dummy"
+            model = cloud_model or _env("EMBEDDING_MODEL", "")
+            if base_url and model:
+                try:
+                    client = _make_openai_compatible_embedder(model, api_key, base_url)
+                    log.info(f"[model_factory] Embedder → openai_compatible:{model} @ {base_url}")
+                except Exception as e:
+                    log.warning(f"[model_factory] Embedder openai_compatible failed ({e}); "
+                                f"falling back to local sentence-transformers")
+            else:
+                log.warning("[model_factory] Embedder openai_compatible requires "
+                            "EMBEDDING_BASE_URL and EMBEDDING_MODEL; "
+                            "falling back to local sentence-transformers")
+
+        # ── Cloud providers via dispatch table ────────────────────────────────
+        elif provider in _EMBED_BUILDERS:
             builder, key_env = _EMBED_BUILDERS[provider]
             client = _try_cloud("Embedder", builder, cloud_model, key_env, provider)
         elif provider not in ("local",):
             log.warning(f"[model_factory] unknown EMBEDDING provider '{provider}', "
                         f"using local sentence-transformers")
 
+        # ── Local SentenceTransformers fallback ──────────────────────────────
         if client is None:
             try:
                 client = _make_local_embedder(local_model)
