@@ -694,9 +694,6 @@ async def handle_client(websocket) -> None:
                         call_id,
                         chunk_id=chunk_id,
                         turn_id=turn_id,
-                        enrichment_ms=f"{float(action_metadata.get('enrich_duration_ms') or 0.0):.1f}",
-                        retrieval_ms=f"{float(action_metadata.get('rag_retrieve_duration_ms') or 0.0):.1f}",
-                        generation_ms=f"{float(action_metadata.get('generation_duration_ms') or 0.0):.1f}",
                         workflow_ms=f"{float(action_metadata.get('workflow_duration_ms') or 0.0):.1f}",
                         query=log_text(enriched_query) if enriched_query else "NO MATCH",
                     )
@@ -706,7 +703,6 @@ async def handle_client(websocket) -> None:
                         chunk_id=chunk_id,
                         turn_id=turn_id,
                         event="retrieved_chunks",
-                        duration_ms=f"{float(action_metadata.get('rag_retrieve_duration_ms') or 0.0):.1f}",
                         chunk_1=log_text(str(top_chunks[0]), limit=180) if len(top_chunks) > 0 else None,
                         chunk_2=log_text(str(top_chunks[1]), limit=180) if len(top_chunks) > 1 else None,
                         chunk_3=log_text(str(top_chunks[2]), limit=180) if len(top_chunks) > 2 else None,

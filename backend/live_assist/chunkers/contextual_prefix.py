@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from langfuse import observe
 import httpx
 
 
@@ -265,6 +266,7 @@ def generate_prefix(chunk_text: str, section_text: str,
 # ---------------------------------------------------------------------------
 
 
+@observe(name="enrich_chunks")
 def enrich_chunks(chunks: list[dict[str, Any]],
                   section_lookup: dict[str, str],
                   doc_title: str = "",

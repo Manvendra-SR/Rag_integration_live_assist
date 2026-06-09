@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from langfuse import observe
 import numpy as np
 
 log = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ def get_embedder(model_name: str = DEFAULT_MODEL):
     return _LEGACY_MODEL
 
 
+@observe(name="generate_embeddings")
 def embed_texts(texts: list[str], model_name: str = DEFAULT_MODEL,
                 batch_size: int = 8, normalize: bool = True) -> np.ndarray:
     """Embed a list of texts via the unified client factory.

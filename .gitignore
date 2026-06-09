@@ -24,3 +24,5 @@ frontends/*/build/
 native-audio-capture/**/.build/
 
 .DS_Store
+
+backend/test_*.py

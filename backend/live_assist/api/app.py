@@ -45,6 +45,72 @@ async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/langfuse")
+async def langfuse_health() -> dict[str, str]:
+    """
+    Check Langfuse connectivity and configuration status.
+    
+    Returns one of the following statuses:
+    - "healthy": Langfuse is configured and connection successful
+    - "disabled": Langfuse observability is disabled via configuration
+    - "misconfigured": Langfuse credentials not configured
+    - "unhealthy": Langfuse authentication failed
+    - "error": Langfuse connection error
+    
+    Validates: Requirements 11.2
+    """
+    from live_assist.core.config import get_settings
+    
+    settings = get_settings()
+    
+    # Check if Langfuse is disabled
+    if not settings.langfuse_enabled:
+        return {
+            "status": "disabled",
+            "message": "Langfuse observability is disabled"
+        }
+    
+    # Check if credentials are configured
+    if not settings.langfuse_public_key or not settings.langfuse_secret_key:
+        return {
+            "status": "misconfigured",
+            "message": "Langfuse credentials not configured"
+        }
+    
+    # Attempt to verify connection
+    try:
+        from langfuse import Langfuse
+        
+        langfuse = Langfuse(
+            public_key=settings.langfuse_public_key,
+            secret_key=settings.langfuse_secret_key,
+            host=settings.langfuse_host
+        )
+        
+        # Perform authentication check
+        if langfuse.auth_check():
+            return {
+                "status": "healthy",
+                "message": "Langfuse connection successful",
+                "host": settings.langfuse_host
+            }
+        else:
+            return {
+                "status": "unhealthy",
+                "message": "Langfuse authentication failed"
+            }
+    except ImportError:
+        return {
+            "status": "error",
+            "message": "Langfuse package not installed"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Langfuse connection error: {str(e)}"
+        }
+
+
 def main() -> None:
     import uvicorn
 

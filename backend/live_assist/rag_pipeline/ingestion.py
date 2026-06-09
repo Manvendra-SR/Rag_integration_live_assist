@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from pathlib import Path
 from typing import Any, Callable
+
+from langfuse import observe
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ ProgressFn = Callable[[str, str], None]
 def _noop(stage: str, msg: str) -> None:
     pass
 
+@observe(name="ingest_document")
 def ingest_pdf(
     pdf_path: str | Path,
     user_id: str,
@@ -38,13 +40,11 @@ def ingest_pdf(
         return {"status": "error", "error": f"PDF not found: {pdf_path}"}
 
     stem = f"{user_id}_{document_id}"
-    t_total = time.perf_counter()
     stages: dict[str, Any] = {}
 
     try:
         # Stage 1: Parse
         on_progress("parse", f"Parsing PDF: {pdf_path.name} ...")
-        t0 = time.perf_counter()
 
         from live_assist.parsers.docling_parser import parse_pdf
         
@@ -59,18 +59,15 @@ def ingest_pdf(
 
         parsed = json.loads(parsed_path.read_text(encoding="utf-8"))
 
-        parse_time = round(time.perf_counter() - t0, 2)
         block_count = len(parsed.get("blocks", []))
         stages["parse"] = {
-            "elapsed_s": parse_time,
             "output": str(parsed_path),
             "block_count": block_count,
         }
-        on_progress("parse", f"✓ Parsed {block_count} blocks in {parse_time}s → {parsed_path.name}")
+        on_progress("parse", f"✓ Parsed {block_count} blocks → {parsed_path.name}")
 
         # Stage 2: Structural Chunk
         on_progress("chunk", "Structural chunking ...")
-        t0 = time.perf_counter()
 
         from live_assist.chunkers.structural_chunker import chunk_parsed_doc, save_chunks
         chunks = chunk_parsed_doc(parsed)
@@ -78,19 +75,16 @@ def ingest_pdf(
         chunk_path = CHUNKS_DIR / out_name
         save_chunks(chunks, chunk_path)
 
-        chunk_time = round(time.perf_counter() - t0, 2)
         total_tokens = sum(c.token_count if hasattr(c, "token_count") else c.get("token_count", 0) for c in chunks)
         stages["chunk"] = {
-            "elapsed_s": chunk_time,
             "output": str(chunk_path),
             "chunk_count": len(chunks),
             "total_tokens": total_tokens,
         }
-        on_progress("chunk", f"✓ {len(chunks)} chunks ({total_tokens:,} tokens) in {chunk_time}s")
+        on_progress("chunk", f"✓ {len(chunks)} chunks ({total_tokens:,} tokens)")
 
         # Stage 3: Enrich
         on_progress("enrich", f"Generating LLM prefixes via {llm_provider} ...")
-        t0 = time.perf_counter()
 
         os.environ["LLM_PROVIDER"] = llm_provider
 
@@ -147,19 +141,16 @@ def ingest_pdf(
         vec_path = ENRICHED_DIR / f"{stem}.vectors.npz"
         save_vectors(vectors, chunk_ids, vec_path, model_name=embedder_model)
 
-        enrich_time = round(time.perf_counter() - t0, 2)
         stages["enrich"] = {
-            "elapsed_s": enrich_time,
             "chunks_output": str(enriched_path),
             "vectors_output": str(vec_path),
             "enriched_count": len(enriched),
             "vector_shape": list(vectors.shape) if hasattr(vectors, "shape") else [],
         }
-        on_progress("enrich", f"✓ {len(enriched)} chunks enriched + embedded in {enrich_time}s")
+        on_progress("enrich", f"✓ {len(enriched)} chunks enriched + embedded")
 
         # Stage 4: Index into ChromaDB
         on_progress("index", "Indexing chunks + vectors into ChromaDB ...")
-        t0 = time.perf_counter()
 
         import numpy as np
         
@@ -187,21 +178,18 @@ def ingest_pdf(
             chunking_strategy=_PIPELINE_NAME,
         )
 
-        index_time = round(time.perf_counter() - t0, 2)
         stages["index"] = {
-            "elapsed_s": index_time,
             "collection": index_result["collection"],
             "indexed": index_result["indexed"],
             "failed": index_result["failed"],
         }
-        on_progress("index", f"✓ {index_result['indexed']} chunks indexed into ChromaDB in {index_time}s")
+        on_progress("index", f"✓ {index_result['indexed']} chunks indexed into ChromaDB")
 
         # Stage 5: Rebuild BM25 Index
         # Since we use user scoping, we need the BM25 index to either be per-user OR built across all.
         # The existing `build_bm25_from_dir` rebuilds across ALL enriched chunks in `ENRICHED_DIR`.
         # That's fine because we can filter by `user_id` when retrieving.
         on_progress("bm25", "Rebuilding BM25 keyword index ...")
-        t0 = time.perf_counter()
 
         from live_assist.retrieval.bm25_index import build_bm25_from_dir
 
@@ -212,16 +200,13 @@ def ingest_pdf(
             docs_out=BM25_DIR / f"{_PIPELINE_NAME}.docs.json",
         )
 
-        bm25_time = round(time.perf_counter() - t0, 2)
         stages["bm25"] = {
-            "elapsed_s": bm25_time,
             "total_chunks_in_index": bm25_stats["chunk_count"],
             "docs_in_index": bm25_stats["docs"],
         }
-        on_progress("bm25", f"✓ BM25 index rebuilt ({bm25_stats['chunk_count']} total chunks) in {bm25_time}s")
+        on_progress("bm25", f"✓ BM25 index rebuilt ({bm25_stats['chunk_count']} total chunks)")
 
-        total_elapsed = round(time.perf_counter() - t_total, 2)
-        on_progress("done", f"✅ Ingestion complete in {total_elapsed}s")
+        on_progress("done", "✅ Ingestion complete")
 
         return {
             "status": "ok",
@@ -230,7 +215,6 @@ def ingest_pdf(
             "stages": stages,
             "chunk_count": len(enriched),
             "total_tokens": total_tokens,
-            "elapsed_seconds": total_elapsed,
         }
 
     except Exception as exc:
@@ -240,5 +224,4 @@ def ingest_pdf(
             "stem": stem,
             "stages": stages,
             "error": f"{type(exc).__name__}: {exc}",
-            "elapsed_seconds": round(time.perf_counter() - t_total, 2),
         }

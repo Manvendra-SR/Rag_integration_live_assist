@@ -97,6 +97,10 @@ CONFIG_KEY_ALIASES = {
     "SUMMARIZATION_PROMPT": "summarization_prompt",
     "HISTORY_SUMMARIZATION_PROMPT": "summarization_prompt",
     "RECENT_N_MESSAGES_CONTEXT": "recent_n_messages_context",
+    "LANGFUSE_PUBLIC_KEY": "langfuse_public_key",
+    "LANGFUSE_SECRET_KEY": "langfuse_secret_key",
+    "LANGFUSE_BASE_URL": "langfuse_base_url",
+    "LANGFUSE_ENABLED": "langfuse_enabled",
 }
 
 
@@ -359,6 +363,21 @@ class Settings(BaseSettings):
         "and products discussed. Return summary text only."
     )
     recent_n_messages_context: int = 5
+
+    # Langfuse observability configuration
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_enabled: bool = True
+
+    def is_langfuse_configured(self) -> bool:
+        """Check if Langfuse credentials are configured and valid."""
+        return bool(
+            self.langfuse_enabled
+            and self.langfuse_public_key
+            and self.langfuse_secret_key
+            and self.langfuse_base_url
+        )
 
     def workflow_config(self) -> dict:
         return {

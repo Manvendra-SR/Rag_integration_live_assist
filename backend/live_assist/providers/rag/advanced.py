@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
+
+from langfuse import observe
 
 from live_assist.core.config import get_settings
 from live_assist.rag_pipeline.paths import BM25_DIR
@@ -24,9 +25,9 @@ class AdvancedRetriever:
         self.bm25_index = BM25_DIR / f"{self.pipeline}.pkl"
         self.bm25_docs = BM25_DIR / f"{self.pipeline}.docs.json"
 
+    @observe(name="retrieve_documents")
     def retrieve(self, query: str, user_id: str, doc_filter: str | None = None,
                  mode: str | None = None) -> dict[str, Any]:
-        t_total = time.perf_counter()
         effective_mode = mode or self.mode
 
         # Build filters: MUST scope by user_id
@@ -57,7 +58,7 @@ class AdvancedRetriever:
             elif effective_mode == "bm25":
                 if not self.bm25_index.exists():
                     log.warning(f"BM25 index not found: {self.bm25_index}")
-                    return self._empty_result(t_total)
+                    return self._empty_result()
                 results = search_bm25(query, self.bm25_index, self.bm25_docs, limit=self.top_k, filters=filters)
 
             elif effective_mode in ("hybrid", "reranked"):
@@ -76,7 +77,7 @@ class AdvancedRetriever:
                         results = rr.rerank(query, results, top_k=self.top_k)
 
             if not results:
-                return self._empty_result(t_total)
+                return self._empty_result()
 
             context_payload = assemble_context({"query": query, "results": results})
             
@@ -104,16 +105,14 @@ class AdvancedRetriever:
                 "context": context,
                 "rag_top_chunks": rag_top_chunks,
                 "rag_raw_chunks": results,
-                "rag_retrieve_duration_ms": (time.perf_counter() - t_total) * 1000,
             }
 
         except Exception as exc:
             log.exception("Retrieval failed")
-            return self._empty_result(t_total)
+            return self._empty_result()
 
-    def _empty_result(self, t_start: float) -> dict[str, Any]:
+    def _empty_result(self) -> dict[str, Any]:
         return {
             "context": "",
             "rag_top_chunks": [],
-            "rag_retrieve_duration_ms": (time.perf_counter() - t_start) * 1000,
         }

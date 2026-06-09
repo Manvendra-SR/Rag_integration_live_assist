@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from langfuse import observe
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class SemanticCache:
 
     # ── Lookup ─────────────────────────────────────────────────────────────────
 
+    @observe(name="cache_lookup")
     def lookup(self, enriched_query: str) -> dict[str, Any]:
         """
         Attempt a semantic cache lookup using the enriched (rewritten) query.
@@ -155,6 +157,7 @@ class SemanticCache:
             return [SemanticCache._safe_serialise(v) for v in obj]
         return obj
 
+    @observe(name="cache_store")
     def write(
         self,
         enriched_query: str,

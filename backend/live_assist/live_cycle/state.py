@@ -25,9 +25,6 @@ class LiveAssistState(BaseModel):
     context: str = ""
     rag_top_chunks: list[str] = Field(default_factory=list)
     rag_raw_chunks: list[dict] = Field(default_factory=list)
-    enrich_duration_ms: float = 0.0
-    rag_retrieve_duration_ms: float = 0.0
-    generation_duration_ms: float = 0.0
     answer: str = ""
     route: str = "context_only"
     manual_question: bool = False
@@ -36,3 +33,5 @@ class LiveAssistState(BaseModel):
     summary_turn_count: int = 0
     doc_filter: str = ""          # document_id or filename stem to restrict retrieval
     retrieval_mode: str = ""      # overrides settings.rag_retrieval_mode if set
+    cache_hit: bool = False        # True when semantic cache served the answer
+    cache_similarity: float | None = None  # best similarity score from cache lookup

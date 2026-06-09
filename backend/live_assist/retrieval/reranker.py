@@ -16,6 +16,8 @@ import logging
 import os
 from typing import Sequence
 
+from langfuse import observe
+
 log = logging.getLogger(__name__)
 
 RERANK_PROVIDER = (os.environ.get("RERANK_PROVIDER", "local") or "local").lower()
@@ -31,6 +33,7 @@ class BaseReranker:
         self.model_name = model_name
     def score(self, query: str, documents: Sequence[str]) -> list[float]:
         raise NotImplementedError
+    @observe(name="rerank_documents")
     def rerank(self, query: str, candidates: list[dict],
                top_k: int = RERANK_FINAL_LIMIT,
                text_field: str = "text") -> list[dict]:

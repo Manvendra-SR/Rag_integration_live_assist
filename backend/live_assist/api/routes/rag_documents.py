@@ -4,7 +4,6 @@ import asyncio
 import shutil
 import time
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -69,44 +68,6 @@ def _run_ingest(
     documents.save_document_info(doc_info)
 
     # Cache is conversation-scoped and purged on call_end — no global index bump needed.
-
-    # ── Write Ingestion Log ───────────────────────────────────────────────────
-    try:
-        from live_assist.rag_pipeline.paths import LOGS_INGESTION_DIR
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = LOGS_INGESTION_DIR / f"ingest_{document_id}_{timestamp_str}.log"
-        
-        stages = result.get("stage_stats", {})
-        total_time = result.get("elapsed_seconds", 0)
-        
-        lines = [
-            "=" * 50,
-            "INGESTION EXECUTION LOG",
-            f"Document ID: {document_id}",
-            f"Filename:    {filename}",
-            f"Status:      {status}",
-            f"Timestamp:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            f"Total Time:  {total_time}s",
-            "=" * 50,
-            ""
-        ]
-        
-        for stage_name, stats in stages.items():
-            lines.append(f"[{stage_name.upper()}]")
-            for k, v in stats.items():
-                if k == "elapsed_s":
-                    lines.append(f"  Duration: {v}s")
-                else:
-                    lines.append(f"  {k}: {v}")
-            lines.append("")
-            
-        if status == "error":
-            lines.append("[ERROR DETAILS]")
-            lines.append(f"  {result.get('error', 'Unknown error')}")
-            
-        log_file.write_text("\n".join(lines), encoding="utf-8")
-    except Exception as e:
-        print(f"Failed to write ingestion log: {e}")
 
 
 @router.post("/upload", response_model=DocumentUploadResponse)

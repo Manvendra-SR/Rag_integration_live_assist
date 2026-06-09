@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from langchain_core.messages import BaseMessage
@@ -8,9 +7,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from live_assist.core.config import get_settings
-from live_assist.core.diagnostics import log_event
 from live_assist.core.models import ProductType, QueryResponse, RewriteQuestion, Speaker
-from live_assist.core.terminal_log import api_timing, compact_text, debug_log
+from live_assist.core.terminal_log import compact_text, debug_log
 from live_assist.live_cycle.state import LiveAssistState
 from live_assist.providers.llm.groq import GroqLLM
 from live_assist.storage.context_store import context_store
@@ -122,7 +120,6 @@ def summarize_conversation(
     summary_turns: list[dict[str, str]],
     product: str = "",
 ) -> dict[str, Any]:
-    started_at = time.perf_counter()
     existing_summary = context_store.get_current_session_summary(user_id, session_id)
     conversation_text = format_summary_turns(summary_turns).strip()
     if not conversation_text:
@@ -154,10 +151,6 @@ def summarize_conversation(
         variables={},
     )
     context_store.save_summary(user_id, session_id, product, summary)
-    debug_log(
-        f"[Timing] call={session_id} stage=summarize_conversation "
-        f"duration_ms={(time.perf_counter() - started_at) * 1000:.1f}"
-    )
     return {"status": "summary_updated"}
 
 
@@ -218,8 +211,6 @@ def _format_conversation_turns(turns: list[dict[str, str]]) -> str:
 
 
 def ingest_turn(state: LiveAssistState) -> dict[str, Any]:
-    started_at = time.perf_counter()
-    api_timing(state.session_id, "langgraph_started", chunk_id=state.chunk_id, turn_id=state.turn_id)
     speaker = state.speaker or Speaker.UNKNOWN.value
     text = (state.turn_text or state.question or "").strip()
     last_5_turns = [dict(turn) for turn in state.last_5_turns]
@@ -241,20 +232,6 @@ def ingest_turn(state: LiveAssistState) -> dict[str, Any]:
         f"[Conversation Context] call={state.session_id} speaker={speaker} "
         f"route={route} conversation_turns={conversation_turn_count} "
         f"last_5={len(last_5_turns)} text={log_text(text)}"
-    )
-    debug_log(
-        f"[Timing] call={state.session_id} stage=ingest_turn "
-        f"duration_ms={(time.perf_counter() - started_at) * 1000:.1f}"
-    )
-    log_event(
-        "ingest_turn",
-        call_id=state.session_id,
-        trace_id=state.trace_id,
-        utterance_id=state.utterance_id,
-        speaker=speaker,
-        route=route,
-        duration_ms=(time.perf_counter() - started_at) * 1000,
-        text=text,
     )
     return {
         "turn_text": text,
@@ -322,35 +299,7 @@ def context_only(state: LiveAssistState) -> dict[str, Any]:
 
 
 def enrich_query(state: LiveAssistState) -> dict[str, Any]:
-    started_at = time.perf_counter()
-    api_timing(state.session_id, "enrichment_started", chunk_id=state.chunk_id, turn_id=state.turn_id)
-
-    # ── Option B: Skip LLM if query was pre-enriched by the cache flow ─────────
-    if state.rewriten_question:
-        enrich_duration_ms = (time.perf_counter() - started_at) * 1000
-        api_timing(
-            state.session_id,
-            "enrichment_skipped_pre_enriched",
-            chunk_id=state.chunk_id,
-            turn_id=state.turn_id,
-            duration_ms=f"{enrich_duration_ms:.1f}",
-            query=log_text(state.rewriten_question),
-        )
-        debug_log(
-            f"[Enrichment] pre-enriched query used — skipping LLM | "
-            f"query={log_text(state.rewriten_question)}"
-        )
-        # Still resolve the product from existing context
-        selected_product = _normalize_rag_product(state.product or "") or (
-            state.product_context.split(",")[0].strip() if state.product_context else ""
-        )
-        return {
-            "rewriten_question": state.rewriten_question,
-            "enrich_duration_ms": 0.0,
-            "product": selected_product or state.product,
-        }
-
-    # ── Standard enrichment via LLM ─────────────────────────────────────────────
+    # Always perform LLM enrichment — cache is now checked as a separate downstream node
     user_prompt = f"""
     ## User Question
     {state.question}
@@ -379,30 +328,9 @@ def enrich_query(state: LiveAssistState) -> dict[str, Any]:
         response = RewriteQuestion(rewriten_question="", product="")
     # If the LLM returned nothing, keep the original question so retrieval still runs
     enriched_query = (response.rewriten_question or state.question or "").strip()
-    enrich_duration_ms = (time.perf_counter() - started_at) * 1000
-    api_timing(
-        state.session_id,
-        "enrichment_completed",
-        chunk_id=state.chunk_id,
-        turn_id=state.turn_id,
-        duration_ms=f"{enrich_duration_ms:.1f}",
-        query=log_text(enriched_query) if enriched_query else "NO_MATCH",
-    )
     debug_log(
         "Enriched query created | "
-        f"query={log_text(enriched_query) if enriched_query else 'NO MATCH'} | "
-        f"duration_ms={enrich_duration_ms:.1f}"
-    )
-    log_event(
-        "enriched_query_created",
-        call_id=state.session_id,
-        trace_id=state.trace_id,
-        utterance_id=state.utterance_id,
-        speaker=state.speaker,
-        duration_ms=(time.perf_counter() - started_at) * 1000,
-        raw_question=state.question,
-        enriched_query=enriched_query,
-        product=response.product or "",
+        f"query={log_text(enriched_query) if enriched_query else 'NO MATCH'}"
     )
     product_context = _merge_product_context(state.product_context, response.product or "")
     if product_context:
@@ -414,29 +342,114 @@ def enrich_query(state: LiveAssistState) -> dict[str, Any]:
         "rewriten_question": enriched_query,
         "product": selected_product,
         "product_context": product_context,
-        "enrich_duration_ms": enrich_duration_ms,
     }
 
 
+def check_cache(state: LiveAssistState) -> dict[str, Any]:
+    """Semantic cache lookup node — runs after enrichment so the enriched query is used as the key."""
+    # Only attempt cache lookup for manual questions when cache is enabled
+    if not state.manual_question:
+        return {"cache_hit": False, "cache_similarity": None}
+
+    _settings = get_settings()
+    if not _settings.rag_cache_enabled:
+        return {"cache_hit": False, "cache_similarity": None}
+
+    try:
+        from live_assist.rag_pipeline.paths import conversation_cache_dir
+        from live_assist.rag_pipeline.semantic_cache import SemanticCache
+
+        cache = SemanticCache(
+            conversation_cache_dir(state.session_id),
+            similarity_threshold=_settings.rag_cache_similarity_threshold,
+            max_age_days=_settings.rag_cache_max_age_days,
+        )
+        query_key = (state.rewriten_question or state.question or "").strip()
+        hit = cache.lookup(query_key)
+        similarity = hit.get("similarity")
+        sim_str = f"{similarity:.4f}" if similarity is not None else "N/A"
+
+        if hit.get("result") == "HIT":
+            debug_log(f"[SemanticCache] HIT | sim={sim_str} | session={state.session_id}")
+            cached_response = hit["workflow_response"]
+            # Inject cached values back into state so serve_cached_answer can return them
+            return {
+                "cache_hit": True,
+                "cache_similarity": similarity,
+                "answer": cached_response.get("answer", ""),
+                "context": cached_response.get("context", ""),
+                "rag_top_chunks": cached_response.get("rag_top_chunks", []),
+                "rag_raw_chunks": cached_response.get("rag_raw_chunks", []),
+            }
+        else:
+            debug_log(f"[SemanticCache] MISS | best_sim={sim_str} | session={state.session_id}")
+            return {"cache_hit": False, "cache_similarity": similarity}
+    except Exception as exc:
+        debug_log(f"[SemanticCache] lookup error (ignored): {exc}")
+        return {"cache_hit": False, "cache_similarity": None}
+
+
+def route_by_cache(state: LiveAssistState) -> str:
+    """Conditional edge: short-circuit to cached answer or proceed with full retrieval."""
+    return "cache_hit" if state.cache_hit else "cache_miss"
+
+
+def serve_cached_answer(state: LiveAssistState) -> dict[str, Any]:
+    """Return state as-is — answer was already injected by check_cache."""
+    debug_log(
+        f"[SemanticCache] Serving cached answer | "
+        f"sim={state.cache_similarity} | answer_len={len(state.answer)}"
+    )
+    return {"route": "cache_hit"}
+
+
+def cache_store(state: LiveAssistState) -> dict[str, Any]:
+    """Write the freshly generated answer to the semantic cache."""
+    if not state.manual_question:
+        return {}
+
+    _settings = get_settings()
+    if not _settings.rag_cache_enabled:
+        return {}
+
+    answer = (state.answer or "").strip()
+    if not answer:
+        return {}
+
+    try:
+        from live_assist.rag_pipeline.paths import conversation_cache_dir
+        from live_assist.rag_pipeline.semantic_cache import SemanticCache
+
+        cache = SemanticCache(
+            conversation_cache_dir(state.session_id),
+            similarity_threshold=_settings.rag_cache_similarity_threshold,
+            max_age_days=_settings.rag_cache_max_age_days,
+        )
+        query_key = (state.rewriten_question or state.question or "").strip()
+        # Build a minimal workflow_response snapshot for the cache entry
+        workflow_response = {
+            "answer": answer,
+            "context": state.context,
+            "rag_top_chunks": state.rag_top_chunks,
+            "rag_raw_chunks": state.rag_raw_chunks,
+            "rewriten_question": query_key,
+            "product": state.product,
+            "product_context": state.product_context,
+        }
+        cache.write(query_key, workflow_response)
+        debug_log(f"[SemanticCache] Written | session={state.session_id}")
+    except Exception as exc:
+        debug_log(f"[SemanticCache] write error (ignored): {exc}")
+    return {}
+
 
 def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
-    started_at = time.perf_counter()
-    api_timing(state.session_id, "retrieval_started", chunk_id=state.chunk_id, turn_id=state.turn_id)
     query_text = (state.rewriten_question or state.question or "").strip()
     if not query_text:
-        api_timing(
-            state.session_id,
-            "retrieval_completed",
-            chunk_id=state.chunk_id,
-            turn_id=state.turn_id,
-            duration_ms="0.0",
-            chunks=0,
-        )
         return {
             "context": "",
             "rag_top_chunks": [],
             "rag_raw_chunks": [],
-            "rag_retrieve_duration_ms": 0.0,
         }
 
     # ── Call the new configurable retriever ─────────────────────────────────────────────
@@ -465,40 +478,26 @@ def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
                 pipeline_result = {
                     "context": context,
                     "rag_top_chunks": top_chunks,
-                    "rag_retrieve_duration_ms": (time.perf_counter() - started_at) * 1000,
                 }
             else:
                 pipeline_result = {
                     "context": "",
                     "rag_top_chunks": [],
-                    "rag_retrieve_duration_ms": (time.perf_counter() - started_at) * 1000,
                 }
 
     except Exception as exc:
         debug_log(f"[RAG Pipeline Error] {type(exc).__name__}: {exc}")
         pipeline_result = {"status": "error", "error": str(exc)}
 
-    rag_duration_ms = (time.perf_counter() - started_at) * 1000
-
     if pipeline_result.get("status") == "error" or not pipeline_result.get("context"):
-        api_timing(
-            state.session_id,
-            "retrieval_completed",
-            chunk_id=state.chunk_id,
-            turn_id=state.turn_id,
-            duration_ms=f"{rag_duration_ms:.1f}",
-            chunks=0,
-        )
         debug_log(
             f"RAG pipeline returned no results | "
-            f"duration_ms={rag_duration_ms:.1f} | "
             f"error={pipeline_result.get('error', 'no answer')}"
         )
         return {
             "context": "",
             "rag_top_chunks": [],
             "rag_raw_chunks": [],
-            "rag_retrieve_duration_ms": rag_duration_ms,
         }
 
     context = pipeline_result.get("context", "")
@@ -507,58 +506,26 @@ def retrieve_knowledge(state: LiveAssistState) -> dict[str, Any]:
     # Calculate approx chunk count for logging (if available, else fallback)
     chunks_retrieved = len(rag_top_chunks)
 
-    api_timing(
-        state.session_id,
-        "retrieval_completed",
-        chunk_id=state.chunk_id,
-        turn_id=state.turn_id,
-        duration_ms=f"{rag_duration_ms:.1f}",
-        chunks=chunks_retrieved,
-    )
     debug_log(
         "RAG pipeline retrieval done | "
-        f"duration_ms={rag_duration_ms:.1f} | "
         f"chunks={chunks_retrieved} | "
         f"mode={settings.rag_retrieval_mode}"
-    )
-    log_event(
-        "rag_retrieved",
-        call_id=state.session_id,
-        trace_id=state.trace_id,
-        utterance_id=state.utterance_id,
-        speaker=state.speaker,
-        duration_ms=rag_duration_ms,
-        query=query_text,
-        product=state.product or "",
-        chunks=chunks_retrieved,
     )
     return {
         "context": context,
         "rag_top_chunks": rag_top_chunks,
         "rag_raw_chunks": pipeline_result.get("rag_raw_chunks", []),
-        "rag_retrieve_duration_ms": rag_duration_ms,
     }
 
 
 def generate_assist_response(state: LiveAssistState) -> dict[str, Any]:
-    started_at = time.perf_counter()
-    api_timing(state.session_id, "final_generation_started", chunk_id=state.chunk_id, turn_id=state.turn_id)
     # Use rewriten_question when available; fall back to the raw question so we never
     # discard valid retrieved context just because the enricher returned nothing.
     effective_question = (state.rewriten_question or state.question or "").strip()
     if not effective_question:
-        api_timing(
-            state.session_id,
-            "final_generation_completed",
-            chunk_id=state.chunk_id,
-            turn_id=state.turn_id,
-            duration_ms="0.0",
-            answer_len=8,
-        )
-        debug_log("Final generation | duration_ms=0.0 | answer_len=8")
+        debug_log("Final generation | answer_len=8")
         return {
             "answer": "NO_MATCH",
-            "generation_duration_ms": 0.0,
             "messages": [
                 {"role": "user", "content": state.question},
                 {"role": "assistant", "content": "NO_MATCH"},
@@ -605,34 +572,12 @@ def generate_assist_response(state: LiveAssistState) -> dict[str, Any]:
             ),
         },
     )
-    generation_duration_ms = (time.perf_counter() - started_at) * 1000
-    api_timing(
-        state.session_id,
-        "final_generation_completed",
-        chunk_id=state.chunk_id,
-        turn_id=state.turn_id,
-        duration_ms=f"{generation_duration_ms:.1f}",
-        answer_len=len(result.answer or ""),
-    )
     debug_log(
         "Final generation | "
-        f"duration_ms={generation_duration_ms:.1f} | "
         f"answer_len={len(result.answer or '')}"
-    )
-    log_event(
-        "final_answer_generated",
-        call_id=state.session_id,
-        trace_id=state.trace_id,
-        utterance_id=state.utterance_id,
-        speaker=state.speaker,
-        duration_ms=(time.perf_counter() - started_at) * 1000,
-        question=state.rewriten_question or state.question,
-        answer=result.answer,
-        product=state.product or state.product_context,
     )
     return {
         "answer": result.answer,
-        "generation_duration_ms": generation_duration_ms,
         "messages": [
             {"role": "user", "content": state.question},
             {"role": "assistant", "content": f"{result.answer} [PRODUCT:{state.product}]"},
@@ -642,14 +587,20 @@ def generate_assist_response(state: LiveAssistState) -> dict[str, Any]:
 
 def create_workflow():
     workflow = StateGraph(LiveAssistState)
+
+    # Register nodes
     workflow.add_node("ingest_turn", ingest_turn)
     workflow.add_node("update_product_context", update_product_context)
     workflow.add_node("maybe_update_summary", maybe_update_summary)
     workflow.add_node("context_only", context_only)
     workflow.add_node("enrich_query", enrich_query)
+    workflow.add_node("check_cache", check_cache)
+    workflow.add_node("serve_cached_answer", serve_cached_answer)
     workflow.add_node("retrieve_knowledge", retrieve_knowledge)
     workflow.add_node("generate_assist_response", generate_assist_response)
+    workflow.add_node("cache_store", cache_store)
 
+    # Edges
     workflow.add_edge(START, "ingest_turn")
     workflow.add_edge("ingest_turn", "update_product_context")
     workflow.add_edge("update_product_context", "maybe_update_summary")
@@ -662,7 +613,24 @@ def create_workflow():
         },
     )
     workflow.add_edge("context_only", END)
-    workflow.add_edge("enrich_query", "retrieve_knowledge")
+
+    # After enrichment, check the semantic cache
+    workflow.add_edge("enrich_query", "check_cache")
+    workflow.add_conditional_edges(
+        "check_cache",
+        route_by_cache,
+        {
+            "cache_hit": "serve_cached_answer",
+            "cache_miss": "retrieve_knowledge",
+        },
+    )
+
+    # Cache HIT path — short circuit
+    workflow.add_edge("serve_cached_answer", END)
+
+    # Cache MISS path — full retrieval + generation + store
     workflow.add_edge("retrieve_knowledge", "generate_assist_response")
-    workflow.add_edge("generate_assist_response", END)
+    workflow.add_edge("generate_assist_response", "cache_store")
+    workflow.add_edge("cache_store", END)
+
     return workflow.compile(checkpointer=MemorySaver())

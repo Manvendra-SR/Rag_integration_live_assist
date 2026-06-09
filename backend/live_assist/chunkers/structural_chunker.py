@@ -32,6 +32,7 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any
 
+from langfuse import observe
 import tiktoken
 
 ENC = tiktoken.encoding_for_model("gpt-4")  # ~close approximation to bge-m3 tokens
@@ -189,6 +190,7 @@ def _is_section_boundary(block: dict[str, Any]) -> bool:
     return block.get("type") == "section_heading"
 
 
+@observe(name="chunk_document")
 def chunk_parsed_doc(parsed: dict[str, Any]) -> list[Chunk]:
     """Walk blocks, group by section, merge sub-floor sections upward."""
     doc_id = parsed.get("doc_id", "unknown")

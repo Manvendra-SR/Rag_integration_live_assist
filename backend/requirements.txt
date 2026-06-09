@@ -107,5 +107,6 @@ langchain-core>=0.3.0,<0.4
 langchain-openai>=0.3.0,<0.4
 langchain-community>=0.3.0,<0.4
 langgraph>=0.3.0,<0.5
+langfuse>=2.0.0            # Langfuse observability integration
 # chromadb removed — ChromaDBRetriever replaced by pipeline.query()
 

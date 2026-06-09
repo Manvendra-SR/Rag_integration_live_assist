@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from langfuse import observe
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import (
     AcceleratorDevice,
@@ -374,6 +375,7 @@ def _classify_block(item: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
+@observe(name="parse_pdf")
 def parse_pdf(pdf_path: Path, output_dir: Path = PARSED_OUTPUT_DIR) -> Path:
     pdf_path = pdf_path.expanduser().resolve()
     if not pdf_path.exists():
