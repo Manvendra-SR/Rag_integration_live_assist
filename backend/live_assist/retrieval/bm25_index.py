@@ -75,6 +75,7 @@ class BM25Doc:
     page_start: int
     page_end: int
     user_id: str
+    text_with_context: str | None = None
 
 
 def _coerce_chunk(c: dict, source_filename: str) -> BM25Doc:
@@ -90,6 +91,7 @@ def _coerce_chunk(c: dict, source_filename: str) -> BM25Doc:
         page_start=int(c.get("page_start") or 0),
         page_end=int(c.get("page_end") or 0),
         user_id=c.get("user_id") or "",
+        text_with_context=c.get("text_with_context"),
     )
 
 
@@ -113,7 +115,7 @@ def build_bm25_from_dir(chunks_dir: Path, index_out: Path,
         raise ValueError(f"No chunks found in {chunks_dir}")
     # Include section_path words in the BM25 token stream — boost topical match
     corpus = [
-        tokenize(" ".join(d.section_path) + " " + d.text) for d in all_docs
+        tokenize(" ".join(d.section_path) + " " + (d.text_with_context or d.text)) for d in all_docs
     ]
     t0 = time.perf_counter()
     bm25 = BM25Okapi(corpus)
@@ -186,6 +188,7 @@ def search_bm25(query: str, index_path: Path, docs_path: Path,
             "source_filename": d.source_filename,
             "section_path":    d.section_path,
             "text":            d.text,
+            "text_with_context": d.text_with_context,
             "page_start":      d.page_start,
             "page_end":        d.page_end,
             "bm25_score":      round(float(s), 6),

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+from functools import lru_cache
 from typing import Sequence
 
 from langfuse import observe
@@ -79,6 +80,8 @@ class CohereReranker(BaseReranker):
         return [indexed.get(i, 0.0) for i in range(len(documents))]
 
 
+@observe(name="build_reranker")
+@lru_cache(maxsize=1)
 def build_reranker() -> BaseReranker:
     """Return the configured reranker. Cloud first; local fallback on failure."""
     if RERANK_PROVIDER == "cohere":
