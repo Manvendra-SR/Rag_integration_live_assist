@@ -211,7 +211,7 @@ class TritonHttpSession:
             inputs=[audio_input, params_input],
             outputs=outputs,
             headers=self._auth_headers,
-            client_timeout=self._timeout,
+            timeout=int(self._timeout * 1000000),
         )
 
         return self._parse_result(result)
@@ -229,9 +229,10 @@ class TritonHttpSession:
                     else str(raw)
                 ).strip()
                 if text:
+                    logger.debug("TritonHttp parsed TRANSCRIPT: %r", text)
                     return text
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("Error parsing TRANSCRIPT: %s", e)
 
         # Fallback: parse the JSON output
         try:
@@ -244,10 +245,12 @@ class TritonHttpSession:
                 inner = json.loads(inner_str)
                 text = (inner.get("text") or inner.get("transcript") or "").strip()
                 if text:
+                    logger.debug("TritonHttp parsed JSON: %r", text)
                     return text
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("Error parsing JSON: %s", e)
 
+        logger.warning("TritonHttp returning empty string, result: %s", result.get_response())
         return ""
 
     # ── Receive side ────────────────────────────────────────────────────────
@@ -409,6 +412,7 @@ class TritonHttpASRProvider(BaseSTTProvider):
             ssl_options={},
             insecure=False,
             ssl_context_factory=ssl.create_default_context,
+            network_timeout=self._timeout,
         )
         return client
 
