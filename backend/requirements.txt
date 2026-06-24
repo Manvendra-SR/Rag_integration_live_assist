@@ -47,10 +47,18 @@ scikit-learn==1.8.0
 opencv-python-headless==4.11.0.86
 pillow==10.4.0
 
-# ── HTTP / Async ─────────────────────────────────────────────────
+# ── HTTP / Async ─────────────────────────────────────────────────────
 httpx==0.28.1
 requests==2.34.2
 websockets==16.0
+# Triton ASR providers — required when ASR_PROVIDER=triton_http or triton_grpc
+# tritonclient[http] uses SSL + numpy byte arrays (E2E documented approach)
+# tritonclient[grpc] used when E2E exposes an external gRPC host:port
+# gevent is a required dependency of tritonclient[http]
+# tritonclient[http]          # pip install "tritonclient[http]"
+# tritonclient[grpc]          # pip install "tritonclient[grpc]"  (triton_grpc only)
+# gevent                      # pip install gevent  (required by tritonclient[http])
+
 
 # ── Config / Env ─────────────────────────────────────────────────
 python-dotenv==1.2.2

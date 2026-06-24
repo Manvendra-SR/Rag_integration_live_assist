@@ -282,6 +282,34 @@ def _make_anthropic_llm(model: str, api_key: str) -> LLMClient:
     return LLMClient(f"anthropic:{model}", "anthropic", model, False, _call)
 
 
+def _make_openai_compatible_llm(model: str, api_key: str) -> LLMClient:
+    """OpenAI-compatible endpoint (e.g. E2E GPT-OSS-20B, vLLM, LocalAI).
+
+    Reads LLM_BASE_URL from the environment.  The api_key argument is resolved
+    by the dispatch layer from LLM_API_KEY.
+    """
+    from openai import OpenAI
+    base_url = _env("LLM_BASE_URL")
+    if not base_url:
+        raise ValueError(
+            "LLM_BASE_URL must be set when LLM_PROVIDER=openai_compatible"
+        )
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    def _call(prompt: str, options: dict) -> str | None:
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=int(options.get("max_tokens", options.get("num_predict", 1024))),
+            temperature=float(options.get("temperature", 0.0)),
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return (resp.choices[0].message.content or "").strip() or None
+
+    return LLMClient(
+        f"openai_compatible:{model}", "openai_compatible", model, False, _call
+    )
+
+
 # ---------- Embeddings ----------
 def _make_local_embedder(model: str) -> EmbedClient:
     from sentence_transformers import SentenceTransformer
@@ -352,10 +380,12 @@ _VLM_BUILDERS = {
 }
 
 _LLM_BUILDERS = {
-    "groq":      (_make_groq_llm,      "GROQ_API_KEY"),
-    "gemini":    (_make_gemini_llm,    "GEMINI_API_KEY"),
-    "openai":    (_make_openai_llm,    "OPENAI_API_KEY"),
-    "anthropic": (_make_anthropic_llm, "ANTHROPIC_API_KEY"),
+    "groq":              (_make_groq_llm,              "GROQ_API_KEY"),
+    "gemini":            (_make_gemini_llm,            "GEMINI_API_KEY"),
+    "openai":            (_make_openai_llm,            "OPENAI_API_KEY"),
+    "anthropic":         (_make_anthropic_llm,         "ANTHROPIC_API_KEY"),
+    # E2E / self-hosted OpenAI-compatible endpoints (vLLM, LocalAI, etc.)
+    "openai_compatible": (_make_openai_compatible_llm, "LLM_API_KEY"),
 }
 
 _EMBED_BUILDERS = {
@@ -429,17 +459,42 @@ def get_vlm() -> VLMClient:
 
 
 def get_llm() -> LLMClient:
-    """Return the configured text-generation LLM. Cloud first if key valid, else local Ollama."""
+    """Return the configured text-generation LLM. Cloud first if key valid, else local Ollama.
+
+    Provider resolution order (first non-empty value wins):
+      1. LLM_PROVIDER  — canonical var, shared with the runtime workflow.
+      2. GENERATION_PROVIDER — legacy alias kept for backward compatibility.
+      3. 'ollama'  — local fallback.
+
+    Model resolution order:
+      1. LLM_MODEL       — canonical var.
+      2. GENERATION_MODEL — legacy alias.
+      3. Provider-specific default.
+    """
     with _LOCK:
         if "llm" in _CACHE:
             return _CACHE["llm"]
-        provider = (_env("GENERATION_PROVIDER", "ollama") or "ollama").lower()
-        cloud_model = _env("GENERATION_MODEL") or {
-            "groq": "llama-3.3-70b-versatile",
-            "gemini": "gemini-2.0-flash",
-            "openai": "gpt-4o-mini",
-            "anthropic": "claude-haiku-4-5",
-        }.get(provider, "")
+
+        # ── Provider ──────────────────────────────────────────────────────────
+        provider = (
+            _env("LLM_PROVIDER")
+            or _env("GENERATION_PROVIDER")
+            or "ollama"
+        ).lower()
+
+        # ── Model ─────────────────────────────────────────────────────────────
+        _model_defaults: dict[str, str] = {
+            "groq":              "llama-3.3-70b-versatile",
+            "gemini":            "gemini-2.0-flash",
+            "openai":            "gpt-4o-mini",
+            "anthropic":         "claude-haiku-4-5",
+            "openai_compatible": "openai/gpt-oss-20b",
+        }
+        cloud_model = (
+            _env("LLM_MODEL")
+            or _env("GENERATION_MODEL")
+            or _model_defaults.get(provider, "")
+        )
         local_model = _env("LLM_LOCAL_MODEL", "llama3.1")
 
         client: LLMClient | None = None

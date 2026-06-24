@@ -41,7 +41,7 @@ from live_assist.audio.pcm import (
 from live_assist.core.config import get_settings
 from live_assist.core.diagnostics import log_event
 from live_assist.core.terminal_log import api_summary_timing, client_timing
-from live_assist.providers.asr.sarvam import SarvamStreamingASR
+from live_assist.providers.asr.factory import create_asr_provider
 
 settings = get_settings()
 
@@ -135,7 +135,7 @@ def parse_audio_chunk_meta(message: str) -> dict | None:
 
 async def handle_client(websocket) -> None:
     call_id = extract_call_id_from_path(getattr(websocket, "path", None))
-    asr_provider = SarvamStreamingASR()
+    asr_provider = create_asr_provider(settings)
     diagnostic_mode = (
         settings.diagnostics_enabled
         or settings.desktop_audio_capture_mode == "desktop_native_diagnostic"
@@ -621,7 +621,7 @@ async def handle_client(websocket) -> None:
                     "call_id": call_id,
                     "speaker": speaker_name,
                     "transcript": text,
-                    "translated_text": text if settings.sarvam_mode == "translate" else None,
+                    "translated_text": text if settings.stt_translate_enabled else None,
                     "timestamp": time.time(),
                     "hasInterruptions": has_interruptions,
                     "source": settings.input_source,

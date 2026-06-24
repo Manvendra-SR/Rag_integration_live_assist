@@ -29,12 +29,19 @@ def ingest_pdf(
     user_id: str,
     document_id: str,
     *,
-    llm_provider: str = "groq",
+    llm_provider: str = "",
     embedder_model: str = "BAAI/bge-m3",
     llm_parallelism: int | None = None,
     semantic_refine: bool = True,
     on_progress: ProgressFn = _noop,
 ) -> dict[str, Any]:
+    """Ingest a PDF through the full pipeline.
+
+    Args:
+        llm_provider: deprecated — ignored if set. Provider is now read from
+            LLM_PROVIDER env var so that ingestion and runtime share the same
+            endpoint config. Pass an empty string or omit entirely.
+    """
     pdf_path = Path(pdf_path).expanduser().resolve()
     if not pdf_path.exists():
         return {"status": "error", "error": f"PDF not found: {pdf_path}"}
@@ -84,12 +91,10 @@ def ingest_pdf(
         on_progress("chunk", f"✓ {len(chunks)} chunks ({total_tokens:,} tokens)")
 
         # Stage 3: Enrich
-        on_progress("enrich", f"Generating LLM prefixes via {llm_provider} ...")
-
-        os.environ["LLM_PROVIDER"] = llm_provider
+        on_progress("enrich", "Generating LLM contextual prefixes via configured LLM provider ...")
 
         from live_assist.chunkers.contextual_prefix import (
-            GROQ_MODEL, OLLAMA_MODEL, build_section_lookup, enrich_chunks,
+            build_section_lookup, enrich_chunks,
             save_enriched,
         )
         from live_assist.chunkers.semantic_refine import (
@@ -97,8 +102,9 @@ def ingest_pdf(
         )
         from live_assist.embedders.local_embed import embed_texts, save_vectors
 
-        model = GROQ_MODEL if llm_provider == "groq" else OLLAMA_MODEL
-        parallelism = llm_parallelism or (4 if llm_provider == "groq" else 6)
+        # Parallelism: honour explicit override; default to a safe value
+        # suitable for rate-limited cloud endpoints.
+        parallelism = llm_parallelism or 4
 
         chunks_blob = json.loads(chunk_path.read_text(encoding="utf-8"))
         raw_chunks = chunks_blob["chunks"]
@@ -126,7 +132,6 @@ def ingest_pdf(
             chunks=raw_chunks,
             section_lookup=section_lookup,
             doc_title=pdf_path.name,
-            model=model,
             parallelism=parallelism,
         )
 

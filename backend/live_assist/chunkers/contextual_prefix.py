@@ -275,7 +275,9 @@ def enrich_chunks(chunks: list[dict[str, Any]],
                   progress_every: int = 10) -> list[dict[str, Any]]:
     """Returns chunks with new fields contextual_prefix + text_with_context."""
 
-    provider = (os.environ.get("LLM_PROVIDER", "ollama")).lower()
+    enriched = [dict(c) for c in chunks]
+    t0 = time.perf_counter()
+    completed = 0
 
     def _one(idx_chunk: tuple[int, dict[str, Any]]) -> tuple[int, str, str]:
         idx, c = idx_chunk
@@ -283,32 +285,32 @@ def enrich_chunks(chunks: list[dict[str, Any]],
         section_key = sp[0] if sp else "__root__"
         section_text = section_lookup.get(section_key, c["text"])
         try:
-            if provider == "groq":
-                prefix = generate_prefix_groq(c["text"], section_text, model=model)
-            else:
-                with httpx.Client(timeout=HTTP_TIMEOUT) as cli:
-                    prefix = generate_prefix_ollama(c["text"], section_text,
-                                                    model=model, client=cli)
+            # Always route through the unified factory (clients.get_llm()).
+            # Provider + model are resolved from LLM_PROVIDER / LLM_BASE_URL /
+            # LLM_API_KEY / LLM_MODEL — no per-call wiring needed here.
+            prefix = generate_prefix(c["text"], section_text)
         except Exception as exc:
             log.warning(f"chunk {idx} prefix failed ({exc}); falling back to template")
             sp_str = " > ".join(c.get("section_path") or [])
             prefix = (f"This chunk is from {doc_title or 'the document'}'s "
                       f"section '{sp_str or 'main body'}'.")
         if not prefix:
-            prefix = f"From section '{' > '.join(sp) if sp else 'main body'}'."
+            prefix = f"From section '{' > '.join(sp) if sp else 'main body'}'"
         text_with_context = f"{prefix}\n\n{c['text']}"
         return idx, prefix, text_with_context
 
-    enriched = [dict(c) for c in chunks]
-    t0 = time.perf_counter()
-    completed = 0
     with ThreadPoolExecutor(max_workers=parallelism) as ex:
         futures = {ex.submit(_one, (i, c)): i for i, c in enumerate(enriched)}
         for fut in as_completed(futures):
             idx, prefix, text_with_context = fut.result()
             enriched[idx]["contextual_prefix"] = prefix
             enriched[idx]["text_with_context"] = text_with_context
-            enriched[idx]["enrichment_model"] = model
+            # Record the effective model name from the factory for traceability.
+            try:
+                from live_assist.clients import get_llm as _get_llm
+                enriched[idx]["enrichment_model"] = _get_llm().name
+            except Exception:
+                enriched[idx]["enrichment_model"] = model
             completed += 1
             if completed % progress_every == 0 or completed == len(enriched):
                 elapsed = time.perf_counter() - t0

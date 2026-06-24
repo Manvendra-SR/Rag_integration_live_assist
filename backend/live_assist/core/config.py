@@ -47,6 +47,20 @@ CONFIG_KEY_ALIASES = {
     "PYTHON_WS_SIMPLE_OVERLAP_PACKET_TARGET": "simple_overlap_packet_target",
     "ASR_PROVIDER": "asr_provider",
     "TRANSLATION_PROVIDER": "translation_provider",
+    "STT_BASE_URL": "stt_base_url",
+    "STT_API_KEY": "stt_api_key",
+    "STT_MODEL": "stt_model",
+    "STT_TASK": "stt_task",
+    "STT_LANGUAGE": "stt_language",
+    # ── Triton ASR providers ────────────────────────────────────────────────
+    "TRITON_HTTP_URL": "triton_http_url",
+    "TRITON_GRPC_URL": "triton_grpc_url",
+    "TRITON_MODEL_NAME": "triton_model_name",
+    "TRITON_AUTH_TOKEN": "triton_auth_token",
+    "TRITON_LANGUAGE": "triton_language",
+    "TRITON_TASK": "triton_task",
+    "TRITON_HTTP_TIMEOUT": "triton_http_timeout",
+    "TRITON_GRPC_TIMEOUT": "triton_grpc_timeout",
     "LLM_PROVIDER": "llm_provider",
     "RAG_PROVIDER": "rag_provider",
     "RAG_RETRIEVAL_MODE": "rag_retrieval_mode",
@@ -184,7 +198,7 @@ class Settings(BaseSettings):
     stream_host: str = Field(default="0.0.0.0", alias="HOST")
     stream_port: int = Field(default=8089, alias="PYTHON_WS_PORT")
 
-    asr_provider: Literal["sarvam"] = "sarvam"
+    asr_provider: Literal["sarvam", "whisper", "triton_http", "triton_grpc"] = "sarvam"
     translation_provider: Literal["sarvam", "none"] = "sarvam"
     llm_provider: Literal["groq", "openai", "openai_compatible"] = "groq"
     # (removed duplicate rag_provider — see line 190 below)
@@ -209,6 +223,29 @@ class Settings(BaseSettings):
     sarvam_model: str = "saaras:v3"
     sarvam_mode: Literal["translate", "transcribe"] = "translate"
     sarvam_language_code: str = "en-IN"
+
+    # ── E2E Whisper streaming endpoint (used when ASR_PROVIDER=whisper) ────
+    stt_base_url: str = Field(default="", alias="STT_BASE_URL")
+    stt_api_key: str = Field(default="", alias="STT_API_KEY")
+    stt_model: str = Field(default="", alias="STT_MODEL")
+    stt_task: Literal["transcribe", "translate"] = Field(
+        default="transcribe", alias="STT_TASK"
+    )
+    stt_language: str = Field(default="", alias="STT_LANGUAGE")
+
+    # ── Triton ASR providers (triton_http / triton_grpc) ───────────────────
+    # TRITON_HTTP_URL: HTTPS base URL for the Triton REST endpoint.
+    #   e.g. https://infer.e2enetworks.net/project/p-17206/endpoint/is-11234
+    # TRITON_GRPC_URL: host:port for the Triton gRPC endpoint (no scheme).
+    #   e.g. my-triton-host.example.com:9000
+    triton_http_url: str = Field(default="", alias="TRITON_HTTP_URL")
+    triton_grpc_url: str = Field(default="", alias="TRITON_GRPC_URL")
+    triton_model_name: str = Field(default="whisper", alias="TRITON_MODEL_NAME")
+    triton_auth_token: str = Field(default="", alias="TRITON_AUTH_TOKEN")
+    triton_language: str = Field(default="", alias="TRITON_LANGUAGE")
+    triton_task: str = Field(default="", alias="TRITON_TASK")
+    triton_http_timeout: float = Field(default=30.0, alias="TRITON_HTTP_TIMEOUT")
+    triton_grpc_timeout: float = Field(default=30.0, alias="TRITON_GRPC_TIMEOUT")
 
     sample_rate: int = Field(default=16000, alias="PYTHON_WS_SAMPLE_RATE")
     chunk_size: int = Field(default=1024, alias="PYTHON_WS_CHUNK_SIZE")
@@ -378,6 +415,24 @@ class Settings(BaseSettings):
             and self.langfuse_secret_key
             and self.langfuse_base_url
         )
+
+    @property
+    def stt_translate_enabled(self) -> bool:
+        """
+        True when the active STT provider is running in translation mode.
+
+        Replaces the previous ``settings.sarvam_mode == "translate"`` check
+        in ``websocket_server.py`` so the server never references a
+        provider-specific attribute directly.
+        """
+        if self.asr_provider == "sarvam":
+            return self.sarvam_mode == "translate"
+        if self.asr_provider == "whisper":
+            return self.stt_task == "translate"
+        if self.asr_provider in ("triton_http", "triton_grpc"):
+            task = self.triton_task or self.stt_task or "transcribe"
+            return task == "translate"
+        return False
 
     def workflow_config(self) -> dict:
         return {

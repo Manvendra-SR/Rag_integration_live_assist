@@ -6,9 +6,10 @@ from typing import AsyncIterator
 from sarvamai import AsyncSarvamAI
 
 from live_assist.core.config import get_settings
+from live_assist.providers.asr.base import BaseSTTProvider
 
 
-class SarvamStreamingASR:
+class SarvamStreamingASR(BaseSTTProvider):
     def __init__(self) -> None:
         self.settings = get_settings()
         if not self.settings.sarvam_api_key:
