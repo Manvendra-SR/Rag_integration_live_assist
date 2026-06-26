@@ -41,6 +41,10 @@ from live_assist.audio.pcm import (
     split_stereo_to_mono,
     target_buffer_bytes,
 )
+from live_assist.audio.transcript_sequencer import (
+    TranscriptSequencer,
+    SequencedUtterance,
+)
 from live_assist.core.config import get_settings
 from live_assist.core.diagnostics import log_event
 
@@ -68,7 +72,17 @@ class _AecCsvLogger:
             if filename not in writers:
                 filepath = os.path.join(self.log_dir, filename)
                 file_exists = os.path.exists(filepath)
-                f = open(filepath, "a", newline="", encoding="utf-8")
+                mode = "a"
+                if file_exists:
+                    try:
+                        with open(filepath, "r", newline="", encoding="utf-8") as existing:
+                            first_row = next(csv.reader(existing), [])
+                        if first_row != headers:
+                            file_exists = False
+                            mode = "w"
+                    except Exception:
+                        pass
+                f = open(filepath, mode, newline="", encoding="utf-8")
                 writer = csv.writer(f)
                 if not file_exists:
                     writer.writerow(headers)
@@ -118,6 +132,21 @@ class _AecCsvLogger:
         headers = ["timestamp","run_id","call_id","current_delay","new_stable_delay","delta","threshold","action"]
         row = [datetime.now().isoformat(), RUN_ID, call_id, current_delay, new_stable_delay, delta, threshold, action]
         self._put_safe("aec_stable_delay.csv", headers, row)
+
+    def log_transcript_timeline(self, call_id, speaker, utterance_id, audio_start_timestamp, audio_start_chunk, audio_end_timestamp, first_partial_received_time, final_transcript_received_time, forward_start_time, forward_complete_time, transcript_length, transcript_preview):
+        headers = ["timestamp", "call_id", "speaker", "utterance_id", "audio_start_timestamp", "audio_start_chunk", "audio_end_timestamp", "first_partial_received_time", "final_transcript_received_time", "forward_start_time", "forward_complete_time", "transcript_length", "transcript_preview"]
+        row = [datetime.now().isoformat(), call_id, speaker, utterance_id, audio_start_timestamp, audio_start_chunk, audio_end_timestamp, first_partial_received_time, final_transcript_received_time, forward_start_time, forward_complete_time, transcript_length, transcript_preview]
+        self._put_safe("transcript_timeline.csv", headers, row)
+
+    def log_transcript_buffer(self, call_id, utterance_id, speaker, audio_start_timestamp, audio_start_chunk, final_received_timestamp, buffer_enter_time, buffer_release_time, wait_duration_ms, forwarding_order, release_reason, blocked_by="", active_earlier_count=0):
+        headers = ["timestamp", "call_id", "utterance_id", "speaker", "audio_start_timestamp", "audio_start_chunk", "final_received_timestamp", "buffer_enter_time", "buffer_release_time", "wait_duration_ms", "forwarding_order", "release_reason", "blocked_by", "active_earlier_count"]
+        row = [datetime.now().isoformat(), call_id, utterance_id, speaker, audio_start_timestamp, audio_start_chunk, final_received_timestamp, buffer_enter_time, buffer_release_time, wait_duration_ms, forwarding_order, release_reason, blocked_by, active_earlier_count]
+        self._put_safe("transcript_buffer.csv", headers, row)
+
+    def log_transcript_order(self, call_id, speaker, utterance_id, audio_start_timestamp, audio_start_chunk, final_timestamp, processing_order, another_waiting, reordered, reason, blocked_by="", active_earlier_count=0):
+        headers = ["timestamp", "call_id", "speaker", "utterance_id", "audio_start_timestamp", "audio_start_chunk", "final_timestamp", "processing_order", "another_waiting", "reordered", "reason", "blocked_by", "active_earlier_count"]
+        row = [datetime.now().isoformat(), call_id, speaker, utterance_id, audio_start_timestamp, audio_start_chunk, final_timestamp, processing_order, another_waiting, reordered, reason, blocked_by, active_earlier_count]
+        self._put_safe("transcript_order_debug.csv", headers, row)
 
 _aec_csv_logger = _AecCsvLogger()
 from live_assist.core.terminal_log import api_summary_timing, client_timing
@@ -281,11 +310,12 @@ class _AecProbe:
 
 _AEC_NLMS_ENABLED: bool      = os.environ.get("AEC_NLMS", "").strip() == "1"
 _AEC_NLMS_DELAY_SAMPLES: int = 432    # Stage 0 dominant lag (~27 ms @ 16 kHz)
-_AEC_NLMS_FILTER_LEN: int    = 64     # 4 ms @ 16 kHz
-_AEC_NLMS_MU: float          = 0.15   # NLMS step size
+_AEC_NLMS_FILTER_LEN: int    = 512     # 4 ms @ 16 kHz
+_AEC_NLMS_MU: float          = 1.0    # NLMS step size
 _AEC_NLMS_EPS: float         = 1e-6   # power floor (prevent /0)
 _AEC_NLMS_DT_RATIO: float    = 3.0    # mic/ref RMS ratio to freeze taps
 _AEC_NLMS_DT_FLOOR: float    = 100.0  # minimum mic RMS (PCM16 scale) for DT
+_AEC_NLMS_SUBCHUNK_SIZE: int = 256    # process N samples at a time
 
 
 @dataclass
@@ -365,90 +395,112 @@ class _AecNlms:
         if not left_pcm or not right_pcm:
             return right_pcm, ""
 
-        ref = np.frombuffer(left_pcm,  dtype=np.int16).astype(np.float64)
-        mic = np.frombuffer(right_pcm, dtype=np.int16).astype(np.float64)
-        n = min(len(ref), len(mic))
-        ref, mic = ref[:n], mic[:n]
+        try:
+            ref = np.frombuffer(left_pcm,  dtype=np.int16).astype(np.float64)
+            mic = np.frombuffer(right_pcm, dtype=np.int16).astype(np.float64)
+            n = min(len(ref), len(mic))
+            ref, mic = ref[:n], mic[:n]
 
-        # Append reference into running history; trim to cap memory
-        self._ref_history = np.concatenate([self._ref_history, ref])
-        if len(self._ref_history) > self._max_history:
-            self._ref_history = self._ref_history[-self._max_history:]
+            # Append reference into running history; trim to cap memory
+            self._ref_history = np.concatenate([self._ref_history, ref])
+            if len(self._ref_history) > self._max_history:
+                self._ref_history = self._ref_history[-self._max_history:]
 
-        self._chunk_count += 1
-        h = len(self._ref_history)
-        needed = self.delay_samples + self.filter_len + n
+            self._chunk_count += 1
+            h = len(self._ref_history)
+            needed = self.delay_samples + self.filter_len + n
 
-        if h < needed:
+            if h < needed:
+                log = (
+                    f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
+                    f" status=warming_up history={h} needed={needed}"
+                )
+                return right_pcm, log
+
+            # Build filter-input matrix X: shape (n, filter_len)
+            # X[i, 0] = reference sample most recently aligned to mic[i]
+            #         (i.e., delayed by delay_samples relative to the write head)
+            # X[i, t] = t samples further in the past
+            #
+            # In _ref_history, the sample aligned to mic[i] is at index:
+            #   h - n - delay_samples + i
+            # The filter window for mic[i] spans from that index back by
+            # (filter_len - 1) additional samples.
+            center_end = h - self.delay_samples      # exclusive upper bound for mic[n-1]
+            seg_start  = center_end - n - (self.filter_len - 1)
+            seg_end    = center_end
+
+            if seg_start < 0:
+                log = (
+                    f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
+                    f" status=insufficient_history seg_start={seg_start}"
+                )
+                return right_pcm, log
+
+            segment = self._ref_history[seg_start:seg_end]       # length: n + filter_len - 1
+            X_raw   = sliding_window_view(segment, self.filter_len)  # shape (n, filter_len)
+            # Reverse along the tap axis so w[0] corresponds to the aligned (most recent) sample
+            X = X_raw[:, ::-1]                                   # shape (n, filter_len)
+
+            e_out = np.zeros(n, dtype=np.float64)
+            dt_flags = []
+
+            sub_size = _AEC_NLMS_SUBCHUNK_SIZE
+            for i in range(0, n, sub_size):
+                end_idx = min(i + sub_size, n)
+                X_sub = X[i:end_idx]
+                mic_sub = mic[i:end_idx]
+                ref_sub = ref[i:end_idx]
+
+                y_sub = X_sub @ self._w
+                e_sub = mic_sub - y_sub
+                e_out[i:end_idx] = e_sub
+
+                # Double-talk detection: freeze adaptation when mic >> ref
+                ref_rms_sub = float(np.sqrt(np.mean(ref_sub ** 2))) if len(ref_sub) > 0 else 0.0
+                mic_rms_sub = float(np.sqrt(np.mean(mic_sub ** 2))) if len(mic_sub) > 0 else 0.0
+                dt = mic_rms_sub > self.dt_ratio * ref_rms_sub and mic_rms_sub > self.dt_floor
+                dt_flags.append(dt)
+
+                if not dt:
+                    grad = X_sub.T @ e_sub
+                    x_power = float(np.sum(X_sub ** 2)) / len(X_sub) + self.eps
+                    self._w += (self.mu / x_power) * grad / len(X_sub)
+
+            e = e_out
+
+            # Per-chunk RMS and alpha_est (Stage-1 equivalent: least-squares coupling)
+            ref_rms = float(np.sqrt(np.mean(ref ** 2)))
+            mic_rms = float(np.sqrt(np.mean(mic ** 2)))
+            cln_rms = float(np.sqrt(np.mean(e   ** 2)))
+            error_rms = cln_rms
+            erle_db = (
+                20.0 * math.log10(mic_rms / max(cln_rms, 1e-9))
+                if mic_rms > 1e-9 else 0.0
+            )
+            aligned_col = X[:, 0]                                # most-recent aligned samples
+            ss_ac  = float(np.dot(aligned_col, aligned_col))
+            alpha_est = float(np.dot(mic, aligned_col)) / max(ss_ac, 1e-9)
+
+            w_peak = float(np.max(np.abs(self._w)))
+            dt_overall = any(dt_flags) if dt_flags else False
+
             log = (
                 f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
-                f" status=warming_up history={h} needed={needed}"
+                f" delay={self.delay_samples} mu={self.mu:.3f}"
+                f" ref_rms={ref_rms:.1f} mic_rms={mic_rms:.1f} clean_rms={cln_rms:.1f}"
+                f" erle_db={erle_db:.2f} alpha_est={alpha_est:.4f}"
+                f" w_peak={w_peak:.6f} dt={'frozen' if dt_overall else 'adapting'}"
             )
-            return right_pcm, log
+            _aec_csv_logger.log_nlms(self.call_id, self._chunk_count, self.delay_samples, self.mu, ref_rms, mic_rms, cln_rms, error_rms, erle_db, alpha_est, w_peak, 'frozen' if dt_overall else 'adapting')
 
-        # Build filter-input matrix X: shape (n, filter_len)
-        # X[i, 0] = reference sample most recently aligned to mic[i]
-        #         (i.e., delayed by delay_samples relative to the write head)
-        # X[i, t] = t samples further in the past
-        #
-        # In _ref_history, the sample aligned to mic[i] is at index:
-        #   h - n - delay_samples + i
-        # The filter window for mic[i] spans from that index back by
-        # (filter_len - 1) additional samples.
-        center_end = h - self.delay_samples      # exclusive upper bound for mic[n-1]
-        seg_start  = center_end - n - (self.filter_len - 1)
-        seg_end    = center_end
+            clean_i16 = np.clip(e, -32768, 32767).astype(np.int16)
+            return clean_i16.tobytes(), log
 
-        if seg_start < 0:
-            log = (
-                f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
-                f" status=insufficient_history seg_start={seg_start}"
-            )
-            return right_pcm, log
-
-        segment = self._ref_history[seg_start:seg_end]       # length: n + filter_len - 1
-        X_raw   = sliding_window_view(segment, self.filter_len)  # shape (n, filter_len)
-        # Reverse along the tap axis so w[0] corresponds to the aligned (most recent) sample
-        X = X_raw[:, ::-1]                                   # shape (n, filter_len)
-
-        # Echo estimate and cleaned residual
-        y = X @ self._w     # (n,)  echo estimate
-        e = mic - y         # (n,)  cleaned mic
-
-        # Per-chunk RMS and alpha_est (Stage-1 equivalent: least-squares coupling)
-        ref_rms = float(np.sqrt(np.mean(ref ** 2)))
-        mic_rms = float(np.sqrt(np.mean(mic ** 2)))
-        cln_rms = float(np.sqrt(np.mean(e   ** 2)))
-        error_rms = cln_rms
-        erle_db = (
-            20.0 * math.log10(mic_rms / max(cln_rms, 1e-9))
-            if mic_rms > 1e-9 else 0.0
-        )
-        aligned_col = X[:, 0]                                # most-recent aligned samples
-        ss_ac  = float(np.dot(aligned_col, aligned_col))
-        alpha_est = float(np.dot(mic, aligned_col)) / max(ss_ac, 1e-9)
-
-        # Double-talk detection: freeze adaptation when mic >> ref
-        dt = mic_rms > self.dt_ratio * ref_rms and mic_rms > self.dt_floor
-
-        if not dt:
-            grad    = X.T @ e                                # (filter_len,)
-            x_power = float(np.sum(X ** 2)) / n + self.eps
-            self._w += (self.mu / x_power) * grad / n
-
-        w_peak = float(np.max(np.abs(self._w)))
-
-        log = (
-            f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
-            f" delay={self.delay_samples} mu={self.mu:.3f}"
-            f" ref_rms={ref_rms:.1f} mic_rms={mic_rms:.1f} clean_rms={cln_rms:.1f}"
-            f" erle_db={erle_db:.2f} alpha_est={alpha_est:.4f}"
-            f" w_peak={w_peak:.6f} dt={'frozen' if dt else 'adapting'}"
-        )
-        _aec_csv_logger.log_nlms(self.call_id, self._chunk_count, self.delay_samples, self.mu, ref_rms, mic_rms, cln_rms, error_rms, erle_db, alpha_est, w_peak, 'frozen' if dt else 'adapting')
-
-        clean_i16 = np.clip(e, -32768, 32767).astype(np.int16)
-        return clean_i16.tobytes(), log
+        except Exception as exc:
+            print(f"[AEC NLMS] Error processing chunk: {exc}", flush=True)
+            chunk_str = getattr(self, '_chunk_count', 'unknown')
+            return right_pcm, f"[AEC NLMS] call={self.call_id} chunk={chunk_str} status=error msg={exc}"
 
 
 @dataclass
@@ -571,6 +623,7 @@ async def handle_client(websocket) -> None:
         processed_audio_chunks = 0
         utterance_counter = count(1)
         next_customer_chunk_id = 0
+        next_worker_chunk_id = 0
         last_left_rms = 0.0
         last_right_rms = 0.0
         recent_customer_text_events: list[dict[str, float | str]] = []
@@ -583,6 +636,7 @@ async def handle_client(websocket) -> None:
         pending_audio_meta: deque[dict] = deque()
         expected_native_seq: int | None = None
         stt_backlog_warning_size = 10
+
         diag_print(
             f"[Buffer Config] call={call_id} target_bytes={buffer_target} "
             f"chunk_size={settings.chunk_size} buffer_chunks={settings.buffer_chunks} "
@@ -1182,6 +1236,14 @@ async def handle_client(websocket) -> None:
                 async with websocket_send_lock:
                     await websocket.send(json.dumps(error_payload))
 
+        sequencer = TranscriptSequencer(
+            buffer_ms=settings.transcript_sequencing_buffer_ms,
+            forward_fn=forward_utterance,
+            csv_logger=_aec_csv_logger,
+            call_id=call_id,
+            logging_enabled=settings.transcript_sequencing_logging_enabled,
+        )
+
         async def flush_utterance(
             state: UtteranceState,
             speaker_name: str,
@@ -1198,6 +1260,10 @@ async def handle_client(websocket) -> None:
                 has_interruptions = state.has_interruptions
                 possible_bleed = state.possible_bleed
                 customer_speech_started_perf = state.utterance_started_perf
+                audio_start_timestamp = state.audio_start_timestamp or time.perf_counter()
+                audio_start_chunk = state.audio_start_chunk or 0
+                first_partial_received_time = state.utterance_started_perf or 0.0
+                was_active_registered = state.active_registered
                 chunk_buffer_duration_ms = (
                     (time.perf_counter() - customer_speech_started_perf) * 1000
                     if customer_speech_started_perf is not None
@@ -1210,6 +1276,8 @@ async def handle_client(websocket) -> None:
                     worker_speech_packet_count = 0
 
             if not final_text:
+                if was_active_registered:
+                    await sequencer.discard_active(utterance_id)
                 return
 
             if speaker_name == settings.customer_speaker_label:
@@ -1254,24 +1322,59 @@ async def handle_client(websocket) -> None:
                     "trace_id": trace_id,
                 },
             )
+            
+            if settings.transcript_sequencing_logging_enabled:
+                _aec_csv_logger.log_transcript_timeline(
+                    call_id=call_id,
+                    speaker=speaker_name,
+                    utterance_id=utterance_id,
+                    audio_start_timestamp=audio_start_timestamp,
+                    audio_start_chunk=audio_start_chunk,
+                    audio_end_timestamp=time.perf_counter(),
+                    first_partial_received_time=first_partial_received_time,
+                    final_transcript_received_time=time.perf_counter(),
+                    forward_start_time=time.perf_counter() if not settings.transcript_sequencing_enabled else 0.0,
+                    forward_complete_time=0.0,
+                    transcript_length=len(final_text),
+                    transcript_preview=final_text[:50]
+                )
+
             # Keep the UI transcript ahead of the heavier Live Assist/RAG path.
-            track_background_task(
-                asyncio.create_task(
-                    forward_utterance(
-                        final_text,
-                        speaker_name=speaker_name,
-                        has_interruptions=has_interruptions,
-                        reason=reason,
-                        utterance_id=utterance_id,
-                        possible_bleed=possible_bleed,
-                        trace_id=trace_id,
-                        chunk_id=chunk_id,
-                        turn_id=turn_id,
-                        chunk_buffer_duration_ms=chunk_buffer_duration_ms,
-                        customer_speech_started_perf=customer_speech_started_perf,
+            if settings.transcript_sequencing_enabled:
+                seq_u = SequencedUtterance(
+                    text=final_text,
+                    speaker_name=speaker_name,
+                    has_interruptions=has_interruptions,
+                    reason=reason,
+                    utterance_id=utterance_id,
+                    possible_bleed=possible_bleed,
+                    trace_id=trace_id,
+                    chunk_id=chunk_id,
+                    turn_id=turn_id,
+                    chunk_buffer_duration_ms=chunk_buffer_duration_ms,
+                    customer_speech_started_perf=customer_speech_started_perf,
+                    audio_start_timestamp=audio_start_timestamp,
+                    audio_start_chunk=audio_start_chunk,
+                )
+                track_background_task(asyncio.create_task(sequencer.enqueue(seq_u)))
+            else:
+                track_background_task(
+                    asyncio.create_task(
+                        forward_utterance(
+                            final_text,
+                            speaker_name=speaker_name,
+                            has_interruptions=has_interruptions,
+                            reason=reason,
+                            utterance_id=utterance_id,
+                            possible_bleed=possible_bleed,
+                            trace_id=trace_id,
+                            chunk_id=chunk_id,
+                            turn_id=turn_id,
+                            chunk_buffer_duration_ms=chunk_buffer_duration_ms,
+                            customer_speech_started_perf=customer_speech_started_perf,
+                        )
                     )
                 )
-            )
             if speaker_name == settings.customer_speaker_label:
                 client_timing(
                     call_id,
@@ -1387,6 +1490,9 @@ async def handle_client(websocket) -> None:
 
             if left:
                 if left_has_speech:
+                    if customer_state.audio_start_timestamp is None:
+                        customer_state.audio_start_timestamp = time.perf_counter()
+                        customer_state.audio_start_chunk = processed_audio_chunks
                     customer_speech_packet_count += 1
                 else:
                     customer_speech_packet_count = 0
@@ -1410,6 +1516,9 @@ async def handle_client(websocket) -> None:
 
             if right:
                 if right_has_speech:
+                    if worker_state.audio_start_timestamp is None:
+                        worker_state.audio_start_timestamp = time.perf_counter()
+                        worker_state.audio_start_chunk = processed_audio_chunks
                     worker_speech_packet_count += 1
                 else:
                     worker_speech_packet_count = 0
@@ -1619,7 +1728,7 @@ async def handle_client(websocket) -> None:
             channel_id: int,
             speaker_name: str,
         ) -> None:
-            nonlocal next_customer_chunk_id
+            nonlocal next_customer_chunk_id, next_worker_chunk_id
             async for message in ws:
                 recv_time = time.perf_counter()
                 event_type = getattr(message, "type", None)
@@ -1687,6 +1796,7 @@ async def handle_client(websocket) -> None:
                     latency = recv_time - last_audio_recv_time
                     latencies.append(latency)
 
+                register_active_args = None
                 async with utterance_lock:
                     utterance_id = ensure_utterance_id(state, speaker_name)
                     state.possible_bleed = state.possible_bleed or possible_bleed
@@ -1709,6 +1819,30 @@ async def handle_client(websocket) -> None:
                                 chunk_id=state.chunk_id,
                                 turn_id=state.turn_id,
                             )
+                        else:
+                            next_worker_chunk_id += 1
+                            state.chunk_id = next_worker_chunk_id
+                            state.turn_id = next_worker_chunk_id
+                    if state.audio_start_timestamp is None:
+                        state.audio_start_timestamp = recv_time
+                    if state.audio_start_chunk is None:
+                        state.audio_start_chunk = processed_audio_chunks
+                    if settings.transcript_sequencing_enabled and not state.active_registered:
+                        register_active_args = (
+                            utterance_id,
+                            speaker_name,
+                            state.audio_start_timestamp,
+                            state.audio_start_chunk or 0,
+                        )
+                        state.active_registered = True
+                if register_active_args is not None:
+                    active_utterance_id, active_speaker, active_start, active_chunk = register_active_args
+                    await sequencer.register_active(
+                        utterance_id=active_utterance_id,
+                        speaker_name=active_speaker,
+                        audio_start_timestamp=active_start,
+                        audio_start_chunk=active_chunk,
+                    )
                 log_event(
                     "stt_text_partial_received",
                     call_id=call_id,
@@ -1743,12 +1877,14 @@ async def handle_client(websocket) -> None:
         worker_stt_task = asyncio.create_task(
             stt_sender(ws_worker, settings.worker_speaker_label, worker_stt_queue)
         )
+        sequencer_task = asyncio.create_task(sequencer.flush_loop())
         connection_tasks = {
             receive_task,
             customer_text_task,
             worker_text_task,
             customer_stt_task,
             worker_stt_task,
+            sequencer_task,
         }
 
         try:
@@ -1776,6 +1912,7 @@ async def handle_client(websocket) -> None:
                 channel_id=1,
                 reason="connection_closed",
             )
+            await sequencer.drain()
             if background_tasks:
                 await asyncio.gather(*background_tasks, return_exceptions=True)
 

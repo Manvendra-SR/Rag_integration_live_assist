@@ -16,6 +16,9 @@ class UtteranceState:
     utterance_started_at: float | None = None
     utterance_started_perf: float | None = None
     last_transcript_at: float | None = None
+    audio_start_timestamp: float | None = None
+    audio_start_chunk: int | None = None
+    active_registered: bool = False
 
     def reset(self) -> None:
         self.transcript_buffer.clear()
@@ -29,6 +32,9 @@ class UtteranceState:
         self.utterance_started_at = None
         self.utterance_started_perf = None
         self.last_transcript_at = None
+        self.audio_start_timestamp = None
+        self.audio_start_chunk = None
+        self.active_registered = False
 
 
 def merge_transcript(buffer: list[str], new_text: str) -> bool:

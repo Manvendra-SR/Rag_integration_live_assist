@@ -45,6 +45,9 @@ CONFIG_KEY_ALIASES = {
     "PYTHON_WS_MIC_BLEED_MIN_WORKER_RMS": "mic_bleed_min_worker_rms",
     "PYTHON_WS_SIMPLE_OVERLAP_SUPPRESSION_ENABLED": "simple_overlap_suppression_enabled",
     "PYTHON_WS_SIMPLE_OVERLAP_PACKET_TARGET": "simple_overlap_packet_target",
+    "PYTHON_WS_TRANSCRIPT_SEQUENCING_ENABLED": "transcript_sequencing_enabled",
+    "PYTHON_WS_TRANSCRIPT_SEQUENCING_BUFFER_MS": "transcript_sequencing_buffer_ms",
+    "PYTHON_WS_TRANSCRIPT_SEQUENCING_LOGGING_ENABLED": "transcript_sequencing_logging_enabled",
     "ASR_PROVIDER": "asr_provider",
     "TRANSLATION_PROVIDER": "translation_provider",
     "LLM_PROVIDER": "llm_provider",
@@ -289,6 +292,18 @@ class Settings(BaseSettings):
     simple_overlap_packet_target: int = Field(
         default=3,
         alias="PYTHON_WS_SIMPLE_OVERLAP_PACKET_TARGET",
+    )
+    transcript_sequencing_enabled: bool = Field(
+        default=True,
+        alias="PYTHON_WS_TRANSCRIPT_SEQUENCING_ENABLED",
+    )
+    transcript_sequencing_buffer_ms: float = Field(
+        default=300.0,
+        alias="PYTHON_WS_TRANSCRIPT_SEQUENCING_BUFFER_MS",
+    )
+    transcript_sequencing_logging_enabled: bool = Field(
+        default=False,
+        alias="PYTHON_WS_TRANSCRIPT_SEQUENCING_LOGGING_ENABLED",
     )
 
     customer_speaker_label: str = "Customer"
