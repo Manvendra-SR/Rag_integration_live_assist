@@ -74,6 +74,8 @@ beautifulsoup4==4.14.3
 nltk==3.9.4
 regex==2026.5.9
 tabulate==0.10.0
+rapidfuzz==3.13.0          # fuzzy string matching for transcript-level echo filter
+hypothesis==6.135.0        # property-based testing
 
 # ── Utilities ────────────────────────────────────────────────────
 tqdm==4.67.3

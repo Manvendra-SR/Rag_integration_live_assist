@@ -104,6 +104,11 @@ CONFIG_KEY_ALIASES = {
     "LANGFUSE_SECRET_KEY": "langfuse_secret_key",
     "LANGFUSE_BASE_URL": "langfuse_base_url",
     "LANGFUSE_ENABLED": "langfuse_enabled",
+    "PYTHON_WS_TRANSCRIPT_ECHO_FILTER_ENABLED": "transcript_echo_filter_enabled",
+    "PYTHON_WS_TRANSCRIPT_ECHO_GRACE_PERIOD_SECONDS": "transcript_echo_grace_period_seconds",
+    "PYTHON_WS_TRANSCRIPT_ECHO_TOKEN_OVERLAP_THRESHOLD": "transcript_echo_token_overlap_threshold",
+    "PYTHON_WS_TRANSCRIPT_ECHO_PARTIAL_RATIO_THRESHOLD": "transcript_echo_partial_ratio_threshold",
+    "PYTHON_WS_TRANSCRIPT_ECHO_MIN_CHARS": "transcript_echo_min_chars",
 }
 
 
@@ -240,6 +245,34 @@ class Settings(BaseSettings):
     echo_suppression_enabled: bool = Field(
         default=False,
         alias="PYTHON_WS_ECHO_SUPPRESSION_ENABLED",
+    )
+    transcript_echo_filter_enabled: bool = Field(
+        default=False,
+        alias="PYTHON_WS_TRANSCRIPT_ECHO_FILTER_ENABLED",
+    )
+    transcript_echo_grace_period_seconds: float = Field(
+        default=4.0,
+        alias="PYTHON_WS_TRANSCRIPT_ECHO_GRACE_PERIOD_SECONDS",
+        ge=0.0,
+        le=60.0,
+    )
+    transcript_echo_token_overlap_threshold: float = Field(
+        default=0.80,
+        alias="PYTHON_WS_TRANSCRIPT_ECHO_TOKEN_OVERLAP_THRESHOLD",
+        ge=0.0,
+        le=1.0,
+    )
+    transcript_echo_partial_ratio_threshold: int = Field(
+        default=70,
+        alias="PYTHON_WS_TRANSCRIPT_ECHO_PARTIAL_RATIO_THRESHOLD",
+        ge=0,
+        le=100,
+    )
+    transcript_echo_min_chars: int = Field(
+        default=3,
+        alias="PYTHON_WS_TRANSCRIPT_ECHO_MIN_CHARS",
+        ge=1,
+        le=10000,
     )
     echo_strong_text_similarity_threshold: float = Field(
         default=0.78,

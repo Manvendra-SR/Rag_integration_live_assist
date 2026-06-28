@@ -26,8 +26,6 @@ from itertools import count
 from urllib.parse import parse_qs, urlparse
 
 import httpx
-import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 import websockets
 
 from live_assist.audio.buffering import (
@@ -35,6 +33,7 @@ from live_assist.audio.buffering import (
     build_final_transcript,
     merge_transcript,
 )
+from live_assist.audio.echo_filter import EchoFilter, EchoFilterResult
 from live_assist.audio.pcm import (
     calculate_rms,
     pcm_to_wav_b64,
@@ -55,7 +54,7 @@ from datetime import datetime
 
 RUN_ID = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-class _AecCsvLogger:
+class _CsvLogger:
     def __init__(self, log_dir="runtime/logs"):
         self.log_dir = log_dir
         self.q = queue.Queue(maxsize=10000)
@@ -117,22 +116,6 @@ class _AecCsvLogger:
         except queue.Full:
             self.dropped_logs += 1
 
-    def log_nlms(self, call_id, chunk, delay, mu, ref_rms, mic_rms, clean_rms, error_rms, erle_db, alpha_est, w_peak, dt):
-        echo_reduction_pct = 100.0 * (1.0 - clean_rms / mic_rms) if mic_rms > 0 else ""
-        headers = ["timestamp","run_id","call_id","chunk","delay","mu","ref_rms","mic_rms","clean_rms","error_rms","erle_db","alpha_est","w_peak","dt","echo_reduction_pct"]
-        row = [datetime.now().isoformat(), RUN_ID, call_id, chunk, delay, mu, ref_rms, mic_rms, clean_rms, error_rms, erle_db, alpha_est, w_peak, dt, echo_reduction_pct]
-        self._put_safe("aec_metrics.csv", headers, row)
-
-    def log_probe(self, call_id, window, lag_samples, lag_ms, correlation, ref_rms, mic_rms, stable_count):
-        headers = ["timestamp","run_id","call_id","window","lag_samples","lag_ms","correlation","ref_rms","mic_rms","stable_count"]
-        row = [datetime.now().isoformat(), RUN_ID, call_id, window, lag_samples, lag_ms, correlation, ref_rms, mic_rms, stable_count]
-        self._put_safe("aec_probe.csv", headers, row)
-
-    def log_stable_delay(self, call_id, current_delay, new_stable_delay, delta, threshold, action):
-        headers = ["timestamp","run_id","call_id","current_delay","new_stable_delay","delta","threshold","action"]
-        row = [datetime.now().isoformat(), RUN_ID, call_id, current_delay, new_stable_delay, delta, threshold, action]
-        self._put_safe("aec_stable_delay.csv", headers, row)
-
     def log_transcript_timeline(self, call_id, speaker, utterance_id, audio_start_timestamp, audio_start_chunk, audio_end_timestamp, first_partial_received_time, final_transcript_received_time, forward_start_time, forward_complete_time, transcript_length, transcript_preview):
         headers = ["timestamp", "call_id", "speaker", "utterance_id", "audio_start_timestamp", "audio_start_chunk", "audio_end_timestamp", "first_partial_received_time", "final_transcript_received_time", "forward_start_time", "forward_complete_time", "transcript_length", "transcript_preview"]
         row = [datetime.now().isoformat(), call_id, speaker, utterance_id, audio_start_timestamp, audio_start_chunk, audio_end_timestamp, first_partial_received_time, final_transcript_received_time, forward_start_time, forward_complete_time, transcript_length, transcript_preview]
@@ -148,360 +131,11 @@ class _AecCsvLogger:
         row = [datetime.now().isoformat(), call_id, speaker, utterance_id, audio_start_timestamp, audio_start_chunk, final_timestamp, processing_order, another_waiting, reordered, reason, blocked_by, active_earlier_count]
         self._put_safe("transcript_order_debug.csv", headers, row)
 
-_aec_csv_logger = _AecCsvLogger()
+_csv_logger = _CsvLogger()
 from live_assist.core.terminal_log import api_summary_timing, client_timing
 from live_assist.providers.asr.sarvam import SarvamStreamingASR
 
 settings = get_settings()
-
-# ── Stage 0: AEC Delay Probe ─────────────────────────────────────────────────
-# Activated by setting AEC_PROBE=1 in the environment (or .env file).
-# When active, accumulates 2 seconds of PCM from both channels per session,
-# computes a decimated normalised cross-correlation, and prints structured
-# [AEC Probe] lines to stdout. Audio is NEVER modified.
-#
-# Cross-correlation convention:
-#   C(lag) = sum_j ref[j] * mic[j + lag]
-#   Positive lag  → mic LEADS ref  (echo arrives before SCKit captures it)
-#   Negative lag  → mic LAGS  ref  (echo arrives after SCKit captures it)
-# The expected result on macOS is positive lag (~40-120 ms) because
-# ScreenCaptureKit introduces more latency than the acoustic echo path.
-
-_AEC_PROBE_ENABLED: bool = os.environ.get("AEC_PROBE", "").strip() == "1"
-_AEC_PROBE_SAMPLE_RATE: int = 16_000          # 16 kHz — matches the stereo PCM stream
-_AEC_PROBE_WINDOW_SAMPLES: int = 32_000       # 2-second accumulation window
-_AEC_PROBE_DECIMATION: int = 16               # 16:1 → ~1 kHz working rate
-_AEC_PROBE_SEARCH_RANGE: int = 128            # ±128 decimated samples = ±128 ms
-_AEC_PROBE_STABLE_THRESHOLD_SAMPLES: int = 64 # ±64 samples = ±4 ms for stability
-_AEC_PROBE_STABLE_COUNT_REQUIRED: int = 3     # consecutive agreeing windows
-
-
-@dataclass
-class _AecProbe:
-    """Per-session delay probe state. Thread-safe within a single async session."""
-
-    call_id: str
-    ref_buf: list = field(default_factory=list)   # float32 samples, left channel
-    mic_buf: list = field(default_factory=list)   # float32 samples, right channel
-    window_count: int = 0
-    last_lag: int | None = None
-    stable_count: int = 0
-    stable_lag: int | None = None
-    lag_candidates: deque = field(default_factory=lambda: deque(maxlen=5))
-
-    def feed(self, left_pcm: bytes, right_pcm: bytes) -> None:
-        """Decode PCM16 bytes, accumulate, compute cross-correlation every 2 seconds."""
-        if left_pcm:
-            self.ref_buf.extend(
-                np.frombuffer(left_pcm, dtype=np.int16).astype(np.float32).tolist()
-            )
-        if right_pcm:
-            self.mic_buf.extend(
-                np.frombuffer(right_pcm, dtype=np.int16).astype(np.float32).tolist()
-            )
-
-        if (
-            len(self.ref_buf) < _AEC_PROBE_WINDOW_SAMPLES
-            or len(self.mic_buf) < _AEC_PROBE_WINDOW_SAMPLES
-        ):
-            return  # not enough data yet
-
-        ref = np.array(self.ref_buf[: _AEC_PROBE_WINDOW_SAMPLES], dtype=np.float32)
-        mic = np.array(self.mic_buf[: _AEC_PROBE_WINDOW_SAMPLES], dtype=np.float32)
-
-        # Slide by 50 % so windows overlap and we see change over time
-        slide = _AEC_PROBE_WINDOW_SAMPLES // 2
-        self.ref_buf = self.ref_buf[slide:]
-        self.mic_buf = self.mic_buf[slide:]
-
-        lag_samples, correlation = self._estimate_delay(ref, mic)
-        lag_ms = lag_samples / _AEC_PROBE_SAMPLE_RATE * 1000.0
-        self.window_count += 1
-
-        # Stability tracking
-        if (
-            self.last_lag is not None
-            and abs(self.last_lag - lag_samples) <= _AEC_PROBE_STABLE_THRESHOLD_SAMPLES
-        ):
-            self.stable_count += 1
-        else:
-            self.stable_count = 0
-            self.lag_candidates.clear()
-            
-        self.lag_candidates.append(lag_samples)
-        self.last_lag = lag_samples
-
-        if self.stable_count >= _AEC_PROBE_STABLE_COUNT_REQUIRED:
-            new_stable_lag = int(np.median(self.lag_candidates))
-            if _AEC_NLMS_ENABLED and self.stable_lag != new_stable_lag:
-                print(
-                    f"[AEC Probe] stable_lag_locked={new_stable_lag} candidates={list(self.lag_candidates)}",
-                    flush=True,
-                )
-            self.stable_lag = new_stable_lag
-
-        ref_rms = float(np.sqrt(np.mean(ref ** 2)))
-        mic_rms = float(np.sqrt(np.mean(mic ** 2)))
-
-        print(
-            f"[AEC Probe] call={self.call_id} window={self.window_count}"
-            f" lag_samples={lag_samples} lag_ms={lag_ms:.1f}"
-            f" correlation={correlation:.4f}"
-            f" ref_rms={ref_rms:.1f} mic_rms={mic_rms:.1f}"
-            f" stable_count={self.stable_count}",
-            flush=True,
-        )
-        _aec_csv_logger.log_probe(self.call_id, self.window_count, lag_samples, lag_ms, correlation, ref_rms, mic_rms, self.stable_count)
-
-        if self.stable_count >= _AEC_PROBE_STABLE_COUNT_REQUIRED:
-            print(
-                f"[AEC Probe] call={self.call_id} status=STABLE"
-                f" lag_samples={lag_samples} lag_ms={lag_ms:.1f}"
-                f" correlation={correlation:.4f}"
-                f" windows={self.window_count}",
-                flush=True,
-            )
-
-    @staticmethod
-    def _estimate_delay(ref: np.ndarray, mic: np.ndarray) -> tuple[int, float]:
-        """Normalised cross-correlation on decimated signals. Returns (lag_samples, peak)."""
-        step = _AEC_PROBE_DECIMATION
-        ref_d = ref[::step]
-        mic_d = mic[::step]
-        n = min(len(ref_d), len(mic_d))
-        if n < 8:
-            return 0, 0.0
-
-        search = _AEC_PROBE_SEARCH_RANGE
-        best_lag = 0
-        best_score = -math.inf
-
-        for lag in range(-search, search + 1):
-            j_start = max(0, -lag)
-            j_end = min(n, n - lag)
-            if j_end <= j_start:
-                continue
-            r = ref_d[j_start:j_end]
-            m = mic_d[j_start + lag: j_end + lag]
-            ss_r = float(np.dot(r, r))
-            ss_m = float(np.dot(m, m))
-            denom = math.sqrt(ss_r * ss_m)
-            score = float(np.dot(r, m)) / denom if denom > 1e-9 else 0.0
-            if score > best_score:
-                best_score = score
-                best_lag = lag
-
-        return best_lag * step, best_score
-
-# ── Stage 2: Block NLMS AEC ────────────────────────────────────────────────────────────
-# Activated by AEC_NLMS=1.  Runs independently of AEC_PROBE.
-# Replaces the right (mic) PCM channel with a cleaned signal before it
-# reaches calculate_rms(), the STT gate, and the STT queue.
-#
-# Algorithm: block NLMS with fixed delay line
-#   delay_samples  = 592  (Stage 0 dominant lag, ~37 ms @ 16 kHz)
-#   filter_len     = 64   (4 ms @ 16 kHz, spans the 34–43 ms cluster)
-#   One weight vector gradient step per chunk (O(N×L) numpy, no Python loop)
-#   Double-talk detector freezes adaptation when mic >> ref
-#
-# alpha_est logged every chunk: the least-squares coupling coefficient that
-# Stage 1 would have measured.  Useful for diagnosing convergence without
-# having run Stage 1 separately.
-
-_AEC_NLMS_ENABLED: bool      = os.environ.get("AEC_NLMS", "").strip() == "1"
-_AEC_NLMS_DELAY_SAMPLES: int = 432    # Stage 0 dominant lag (~27 ms @ 16 kHz)
-_AEC_NLMS_FILTER_LEN: int    = 512     # 4 ms @ 16 kHz
-_AEC_NLMS_MU: float          = 1.0    # NLMS step size
-_AEC_NLMS_EPS: float         = 1e-6   # power floor (prevent /0)
-_AEC_NLMS_DT_RATIO: float    = 3.0    # mic/ref RMS ratio to freeze taps
-_AEC_NLMS_DT_FLOOR: float    = 100.0  # minimum mic RMS (PCM16 scale) for DT
-_AEC_NLMS_SUBCHUNK_SIZE: int = 256    # process N samples at a time
-
-
-@dataclass
-class _AecNlms:
-    """
-    Per-session block NLMS acoustic echo canceller (AEC_NLMS=1).
-
-    For each chunk of N samples the update is fully vectorised:
-      X  = sliding_window_view(aligned_ref_segment, filter_len)  # (N, L)
-      y  = X @ w          # echo estimate
-      e  = mic − y        # cleaned signal (sent to STT)
-      w += mu/power * (X.T @ e) / N   [frozen during double-talk]
-
-    delay_samples sets a fixed pre-delay on the reference before the
-    adaptive taps.  The 64 taps then cover ±4 ms around that centre.
-    """
-
-    call_id: str
-    delay_samples: int  = _AEC_NLMS_DELAY_SAMPLES
-    filter_len: int     = _AEC_NLMS_FILTER_LEN
-    mu: float           = _AEC_NLMS_MU
-    eps: float          = _AEC_NLMS_EPS
-    dt_ratio: float     = _AEC_NLMS_DT_RATIO
-    dt_floor: float     = _AEC_NLMS_DT_FLOOR
-
-    _ref_history: np.ndarray = field(init=False, repr=False)
-    _w: np.ndarray           = field(init=False, repr=False)
-    _max_history: int        = field(init=False, repr=False)
-    _chunk_count: int        = field(default=0, init=False)
-    _last_evaluated_delay: int | None = field(default=None, init=False)
-
-    def __post_init__(self) -> None:
-        self._max_history = self.delay_samples + self.filter_len + 16_384
-        self._ref_history = np.zeros(0, dtype=np.float64)
-        self._w = np.zeros(self.filter_len, dtype=np.float64)
-
-    def update_delay(self, new_stable_delay: int) -> bool:
-        """
-        Dynamically update the delay anchor if it shifts by a significant threshold.
-        Returns True if a reset occurred, False otherwise.
-        """
-        if self._last_evaluated_delay == new_stable_delay:
-            return False
-            
-        self._last_evaluated_delay = new_stable_delay
-        
-        threshold = 80
-        delta = abs(self.delay_samples - new_stable_delay)
-        
-        if delta >= threshold:
-            old_delay = self.delay_samples
-            self.delay_samples = new_stable_delay
-            
-            # Reset weights: old alignment is invalid
-            self._w = np.zeros(self.filter_len, dtype=np.float64)
-            
-            # Update max history bound
-            new_max = self.delay_samples + self.filter_len + 16_384
-            if new_max > self._max_history:
-                self._max_history = new_max
-                
-            print(f"[AEC NLMS] current_delay={old_delay} new_stable_delay={new_stable_delay} "
-                  f"delta={delta} threshold={threshold} action=update weights_reset=True", flush=True)
-            _aec_csv_logger.log_stable_delay(self.call_id, old_delay, new_stable_delay, delta, threshold, "update")
-            return True
-        else:
-            print(f"[AEC NLMS] current_delay={self.delay_samples} new_stable_delay={new_stable_delay} "
-                  f"delta={delta} threshold={threshold} action=ignored", flush=True)
-            _aec_csv_logger.log_stable_delay(self.call_id, self.delay_samples, new_stable_delay, delta, threshold, "ignored")
-            return False
-
-    def process(self, left_pcm: bytes, right_pcm: bytes) -> tuple[bytes, str]:
-        """
-        Apply block NLMS.  Returns (cleaned_right_pcm, log_line).
-        Returns right_pcm unchanged if insufficient history has accumulated.
-        """
-        if not left_pcm or not right_pcm:
-            return right_pcm, ""
-
-        try:
-            ref = np.frombuffer(left_pcm,  dtype=np.int16).astype(np.float64)
-            mic = np.frombuffer(right_pcm, dtype=np.int16).astype(np.float64)
-            n = min(len(ref), len(mic))
-            ref, mic = ref[:n], mic[:n]
-
-            # Append reference into running history; trim to cap memory
-            self._ref_history = np.concatenate([self._ref_history, ref])
-            if len(self._ref_history) > self._max_history:
-                self._ref_history = self._ref_history[-self._max_history:]
-
-            self._chunk_count += 1
-            h = len(self._ref_history)
-            needed = self.delay_samples + self.filter_len + n
-
-            if h < needed:
-                log = (
-                    f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
-                    f" status=warming_up history={h} needed={needed}"
-                )
-                return right_pcm, log
-
-            # Build filter-input matrix X: shape (n, filter_len)
-            # X[i, 0] = reference sample most recently aligned to mic[i]
-            #         (i.e., delayed by delay_samples relative to the write head)
-            # X[i, t] = t samples further in the past
-            #
-            # In _ref_history, the sample aligned to mic[i] is at index:
-            #   h - n - delay_samples + i
-            # The filter window for mic[i] spans from that index back by
-            # (filter_len - 1) additional samples.
-            center_end = h - self.delay_samples      # exclusive upper bound for mic[n-1]
-            seg_start  = center_end - n - (self.filter_len - 1)
-            seg_end    = center_end
-
-            if seg_start < 0:
-                log = (
-                    f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
-                    f" status=insufficient_history seg_start={seg_start}"
-                )
-                return right_pcm, log
-
-            segment = self._ref_history[seg_start:seg_end]       # length: n + filter_len - 1
-            X_raw   = sliding_window_view(segment, self.filter_len)  # shape (n, filter_len)
-            # Reverse along the tap axis so w[0] corresponds to the aligned (most recent) sample
-            X = X_raw[:, ::-1]                                   # shape (n, filter_len)
-
-            e_out = np.zeros(n, dtype=np.float64)
-            dt_flags = []
-
-            sub_size = _AEC_NLMS_SUBCHUNK_SIZE
-            for i in range(0, n, sub_size):
-                end_idx = min(i + sub_size, n)
-                X_sub = X[i:end_idx]
-                mic_sub = mic[i:end_idx]
-                ref_sub = ref[i:end_idx]
-
-                y_sub = X_sub @ self._w
-                e_sub = mic_sub - y_sub
-                e_out[i:end_idx] = e_sub
-
-                # Double-talk detection: freeze adaptation when mic >> ref
-                ref_rms_sub = float(np.sqrt(np.mean(ref_sub ** 2))) if len(ref_sub) > 0 else 0.0
-                mic_rms_sub = float(np.sqrt(np.mean(mic_sub ** 2))) if len(mic_sub) > 0 else 0.0
-                dt = mic_rms_sub > self.dt_ratio * ref_rms_sub and mic_rms_sub > self.dt_floor
-                dt_flags.append(dt)
-
-                if not dt:
-                    grad = X_sub.T @ e_sub
-                    x_power = float(np.sum(X_sub ** 2)) / len(X_sub) + self.eps
-                    self._w += (self.mu / x_power) * grad / len(X_sub)
-
-            e = e_out
-
-            # Per-chunk RMS and alpha_est (Stage-1 equivalent: least-squares coupling)
-            ref_rms = float(np.sqrt(np.mean(ref ** 2)))
-            mic_rms = float(np.sqrt(np.mean(mic ** 2)))
-            cln_rms = float(np.sqrt(np.mean(e   ** 2)))
-            error_rms = cln_rms
-            erle_db = (
-                20.0 * math.log10(mic_rms / max(cln_rms, 1e-9))
-                if mic_rms > 1e-9 else 0.0
-            )
-            aligned_col = X[:, 0]                                # most-recent aligned samples
-            ss_ac  = float(np.dot(aligned_col, aligned_col))
-            alpha_est = float(np.dot(mic, aligned_col)) / max(ss_ac, 1e-9)
-
-            w_peak = float(np.max(np.abs(self._w)))
-            dt_overall = any(dt_flags) if dt_flags else False
-
-            log = (
-                f"[AEC NLMS] call={self.call_id} chunk={self._chunk_count}"
-                f" delay={self.delay_samples} mu={self.mu:.3f}"
-                f" ref_rms={ref_rms:.1f} mic_rms={mic_rms:.1f} clean_rms={cln_rms:.1f}"
-                f" erle_db={erle_db:.2f} alpha_est={alpha_est:.4f}"
-                f" w_peak={w_peak:.6f} dt={'frozen' if dt_overall else 'adapting'}"
-            )
-            _aec_csv_logger.log_nlms(self.call_id, self._chunk_count, self.delay_samples, self.mu, ref_rms, mic_rms, cln_rms, error_rms, erle_db, alpha_est, w_peak, 'frozen' if dt_overall else 'adapting')
-
-            clean_i16 = np.clip(e, -32768, 32767).astype(np.int16)
-            return clean_i16.tobytes(), log
-
-        except Exception as exc:
-            print(f"[AEC NLMS] Error processing chunk: {exc}", flush=True)
-            chunk_str = getattr(self, '_chunk_count', 'unknown')
-            return right_pcm, f"[AEC NLMS] call={self.call_id} chunk={chunk_str} status=error msg={exc}"
-
 
 @dataclass
 class STTChunk:
@@ -598,6 +232,14 @@ async def handle_client(websocket) -> None:
         or settings.desktop_audio_capture_mode == "desktop_native_diagnostic"
     )
     echo_tools_enabled = settings.experimental_echo_tools_enabled
+    transcript_echo_filter_enabled = settings.transcript_echo_filter_enabled
+    echo_filter = EchoFilter(
+        grace_period_seconds=settings.transcript_echo_grace_period_seconds,
+        token_overlap_threshold=settings.transcript_echo_token_overlap_threshold,
+        partial_ratio_threshold=settings.transcript_echo_partial_ratio_threshold,
+        min_chars=settings.transcript_echo_min_chars,
+        call_id=call_id,
+    )
 
     def diag_print(message: str) -> None:
         if diagnostic_mode:
@@ -1239,7 +881,7 @@ async def handle_client(websocket) -> None:
         sequencer = TranscriptSequencer(
             buffer_ms=settings.transcript_sequencing_buffer_ms,
             forward_fn=forward_utterance,
-            csv_logger=_aec_csv_logger,
+            csv_logger=_csv_logger,
             call_id=call_id,
             logging_enabled=settings.transcript_sequencing_logging_enabled,
         )
@@ -1309,6 +951,29 @@ async def handle_client(websocket) -> None:
                 text=final_text,
             )
 
+            # ── Transcript-level echo filter ────────────────────────────
+            # Run BEFORE emit_transcript so suppressed echoes never reach the UI.
+            if transcript_echo_filter_enabled:
+                if speaker_name == settings.customer_speaker_label:
+                    # Move active slot → flushed slot; clear active slot
+                    echo_filter.on_customer_flush(final_text)
+                else:
+                    # Evaluate worker utterance; suppress if it matches customer slot
+                    echo_result = echo_filter.evaluate_worker(final_text)
+                    if echo_result.suppress:
+                        diag_print(
+                            f"[Echo Filter] SUPPRESSED call={call_id} "
+                            f"worker={log_text(final_text)} "
+                            f"matched={log_text(echo_result.matched_slot_text)} "
+                            f"token_overlap={echo_result.token_overlap_ratio:.3f} "
+                            f"partial_ratio={echo_result.partial_ratio} "
+                            f"reason={echo_result.reason}"
+                        )
+                        # Discard sequencer registration so it doesn't block later utterances
+                        if was_active_registered:
+                            await sequencer.discard_active(utterance_id)
+                        return  # skip emit_transcript and sequencer.enqueue
+
             await emit_transcript(
                 final_text,
                 channel_id=channel_id,
@@ -1324,7 +989,7 @@ async def handle_client(websocket) -> None:
             )
             
             if settings.transcript_sequencing_logging_enabled:
-                _aec_csv_logger.log_transcript_timeline(
+                _csv_logger.log_transcript_timeline(
                     call_id=call_id,
                     speaker=speaker_name,
                     utterance_id=utterance_id,
@@ -1383,11 +1048,6 @@ async def handle_client(websocket) -> None:
                     turn_id=turn_id,
                 )
 
-        # Stage 0 probe instance (read-only, never modifies audio)
-        _aec_probe: _AecProbe | None = _AecProbe(call_id=call_id) if _AEC_PROBE_ENABLED else None
-        # Stage 2 NLMS instance (replaces right channel when AEC_NLMS=1)
-        _aec_nlms: _AecNlms | None = _AecNlms(call_id=call_id) if _AEC_NLMS_ENABLED else None
-
         async def process_audio_chunk(
             chunk: bytes,
             native_seq: int | None = None,
@@ -1399,18 +1059,6 @@ async def handle_client(websocket) -> None:
             nonlocal consecutive_both_active_packets
 
             left, right = split_stereo_to_mono(chunk)
-
-            # ── Stage 0: delay probe (logging only, audio unchanged) ────────
-            if _aec_probe is not None:
-                _aec_probe.feed(left, right)
-                if _aec_probe.stable_lag is not None and _aec_nlms is not None:
-                    _aec_nlms.update_delay(_aec_probe.stable_lag)
-            # ── Stage 2: block NLMS (replaces right when AEC_NLMS=1) ───────
-            if _aec_nlms is not None:
-                right, _nlms_log = _aec_nlms.process(left, right)
-                if _nlms_log:
-                    print(_nlms_log, flush=True)
-            # ─────────────────────────────────────────────────────────────
 
             left_rms = calculate_rms(left)
             right_rms = calculate_rms(right)
@@ -1751,7 +1399,8 @@ async def handle_client(websocket) -> None:
                 timing_log("stt_text_received", speaker=speaker_name, channel=channel_id)
 
                 if echo_tools_enabled and speaker_name == settings.customer_speaker_label:
-                    remember_customer_text(text)
+                    if not transcript_echo_filter_enabled:
+                        remember_customer_text(text)
 
                 possible_bleed = (
                     echo_tools_enabled
@@ -1761,7 +1410,8 @@ async def handle_client(websocket) -> None:
                 )
                 echo_decision = (
                     classify_worker_echo(text)
-                    if echo_tools_enabled
+                    if not transcript_echo_filter_enabled
+                    and echo_tools_enabled
                     and settings.echo_suppression_enabled
                     and speaker_name == settings.worker_speaker_label
                     else None
@@ -1804,6 +1454,9 @@ async def handle_client(websocket) -> None:
                     state.waiting_for_silence = True
                     if transcript_changed:
                         state.consecutive_low_energy_packets = 0
+                    # Update echo filter active slot after buffer is updated
+                    if transcript_echo_filter_enabled and speaker_name == settings.customer_speaker_label:
+                        echo_filter.update_active_slot(build_final_transcript(state.transcript_buffer))
                     state.last_transcript_at = time.time()
                     if state.utterance_started_at is None:
                         state.utterance_started_at = state.last_transcript_at

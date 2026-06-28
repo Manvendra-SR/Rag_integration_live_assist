@@ -342,7 +342,7 @@ To verify the integration is working correctly:
 | Customer transcript but no answer | Check `[Live Assist Trigger]`, `[Enriched Query]`, `[RAG Retrieved]`, and provider key/RAG index. |
 | Transcript appears late | Check `[Timing]` logs for `stt_text_received`, `final_flush`, `workflow_start`, and `workflow_done`. |
 | Old transcript text changes | Confirm `TRANSCRIPT` events include `utterance_id`; live drafts update, finalized turns should not. |
-| Customer shown as Worker | Stable mode does not suppress echo; use a headset first. Native AEC/suppression is future work. |
+| Customer shown as Worker | Stable mode does not suppress echo; use a headset first.  |
 
 ## Portability Notes
 

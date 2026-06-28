@@ -84,7 +84,7 @@ Stable desktop mode is intentionally simple for headset reliability:
 - no positive RMS gate before STT
 
 Experimental echo tools should stay behind `PYTHON_WS_EXPERIMENTAL_ECHO_TOOLS`.
-Native AEC and smarter suppression can be added later without changing the
+Echo suppression can be added later without changing the
 frontend/backend PCM contract.
 
 ## Transcript Shape
